@@ -45,7 +45,7 @@ CWARNFLAGS=	-Werror -Wall -Wimplicit-function-declaration \
 CMACHFLAGS=	-mcmodel=kernel -mno-red-zone -mno-sse2 -mno-sse -mno-3dnow \
 		-mno-mmx -msoft-float -fno-omit-frame-pointer
 CMACHFLAGS+=	-ffreestanding ${NOPIE_FLAGS}
-SORTR=		sort -R
+SORTR=		sort
 .if ${IDENT:M-DNO_PROPOLICE}
 CMACHFLAGS+=	-fno-stack-protector
 .endif
