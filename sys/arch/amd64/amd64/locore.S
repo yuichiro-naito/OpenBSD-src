@@ -227,7 +227,7 @@ _C_LABEL(mds_disable):	.long	1	# disable MDS mitigation if 1
 	.section .rodata
 	.globl	_C_LABEL(sigcode)
 _C_LABEL(sigcode):
-	call	1f
+	call	*%rax
 	movq	%rsp,%rdi
 	pushq	%rdi			/* fake return address */
 	movq	$SYS_sigreturn,%rax
@@ -509,7 +509,10 @@ ENTRY(cpu_idle_cycle)
 	RETGUARD_SETUP(cpu_idle_cycle, r11)
 	movq	_C_LABEL(cpu_idle_cycle_fcn),%rax
 	cmpq	$0,%rax
-	jne	retpoline_rax
+	je	1f
+	call	*%rax
+	ret
+1:
 	sti
 	hlt
 	RETGUARD_CHECK(cpu_idle_cycle, r11)
@@ -761,8 +764,7 @@ NENTRY(proc_trampoline)
 #endif
 	movl	$IPL_NONE,CPUVAR(ILEVEL)
 	movq	%r13,%rdi
-	movq	%r12,%rax
-	call	retpoline_rax
+	call	*%r12
 	movq	CPUVAR(CURPROC),%r14
 	jmp	.Lsyscall_check_asts
 
