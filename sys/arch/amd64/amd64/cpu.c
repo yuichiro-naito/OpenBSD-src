@@ -258,6 +258,9 @@ replacemds(void)
 		return;
 	replacedone = 1;
 
+	has_verw = 0;
+	goto nop_out;
+
 	if (strcmp(cpu_vendor, "GenuineIntel") != 0 ||
 	    ((ci->ci_feature_sefflags_edx & SEFF0EDX_ARCH_CAP) &&
 	     (rdmsr(MSR_ARCH_CAPABILITIES) & ARCH_CAPABILITIES_MDS_NO))) {
@@ -344,6 +347,7 @@ replacemds(void)
 		}
 	}
 
+ nop_out:
 	if (handler != NULL) {
 		printf("cpu0: using %s MDS workaround%s\n", type, "");
 		s = splhigh();
