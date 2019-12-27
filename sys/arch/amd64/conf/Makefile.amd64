@@ -64,6 +64,9 @@ NO_INTEGR_AS=	-no-integrated-as
 CWARNFLAGS+=	-Wno-address-of-packed-member -Wno-constant-conversion
 .endif
 
+# always disable retpoline, ROP mitigation, RET_GUARD
+CMACHFLAGS+=	-mno-retpoline -fno-fixup-gadgets -fno-ret-protector
+
 DEBUG?=		-g
 COPTS?=		-O2
 CFLAGS=		${DEBUG} ${CWARNFLAGS} ${CMACHFLAGS} ${COPTS} ${PIPE}
