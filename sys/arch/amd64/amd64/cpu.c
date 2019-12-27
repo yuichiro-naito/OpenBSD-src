@@ -258,8 +258,10 @@ replacemds(void)
 		return;
 	replacedone = 1;
 
-	has_verw = 0;
-	goto nop_out;
+	if (mds_disable) {
+	  has_verw = 0;
+	  goto nop_out;
+	}
 
 	if (strcmp(cpu_vendor, "GenuineIntel") != 0 ||
 	    ((ci->ci_feature_sefflags_edx & SEFF0EDX_ARCH_CAP) &&

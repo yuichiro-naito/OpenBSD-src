@@ -212,7 +212,8 @@ bi_size_ok:
 	movl	$0x1, RELOC(cpu_meltdown)	/* assume insecure at first */
 	movl	$0x0, RELOC(pg_g_kern)
 
-	jmp	.Lcpu_secure		# disable cpu_meltdown
+	orl	$0, RELOC(pts_disable)
+	jne	.Lcpu_secure		# disable cpu_meltdown
 
 	cmpl	$0x756e6547, %ebx	# "Genu"
 	jne	.Lcpu_secure

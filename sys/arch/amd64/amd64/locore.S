@@ -178,6 +178,8 @@ _C_LABEL(lapic_isr):
 	.globl	_C_LABEL(pg_nx)
 	.globl	_C_LABEL(pg_g_kern)
 	.globl	_C_LABEL(cpu_meltdown)
+	.globl	_C_LABEL(pts_disable)
+	.globl	_C_LABEL(mds_disable)
 _C_LABEL(cpu_id):	.long	0	# saved from `cpuid' instruction
 _C_LABEL(cpu_feature):	.long	0	# feature flags from 'cpuid'
 					#   instruction
@@ -213,6 +215,8 @@ _C_LABEL(pg_g_kern):	.quad	0	# 0x100 if global pages should be used
 					# in kernel mappings, 0 otherwise (for
 					# insecure CPUs)
 _C_LABEL(cpu_meltdown):	.long	0	# 1 if this CPU has Meltdown
+_C_LABEL(pts_disable):	.long	1	# disable PTS if 1
+_C_LABEL(mds_disable):	.long	1	# disable MDS mitigation if 1
 
 /*****************************************************************************/
 
