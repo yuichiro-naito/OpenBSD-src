@@ -196,6 +196,7 @@ replacemeltdown(void)
 			swapgs_vuln = 0;
 		}
 	}
+	swapgs_vuln = 0;   /* force to disable swapgs mitigation */
 
 	s = splhigh();
 	if (!cpu_meltdown)
