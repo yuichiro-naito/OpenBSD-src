@@ -45,7 +45,7 @@ CWARNFLAGS=	-Werror -Wall -Wimplicit-function-declaration \
 CMACHFLAGS=	-mcmodel=kernel -mno-red-zone -mno-sse2 -mno-sse -mno-3dnow \
 		-mno-mmx -msoft-float -fno-omit-frame-pointer
 CMACHFLAGS+=	-ffreestanding ${NOPIE_FLAGS}
-SORTR=		sort -R
+SORTR=		sort
 .if ${IDENT:M-DNO_PROPOLICE}
 CMACHFLAGS+=	-fno-stack-protector
 .endif
@@ -63,6 +63,9 @@ CMACHFLAGS+=	-mno-retpoline
 NO_INTEGR_AS=	-no-integrated-as
 CWARNFLAGS+=	-Wno-address-of-packed-member -Wno-constant-conversion
 .endif
+
+# always disable retpoline, ROP mitigation, RET_GUARD
+CMACHFLAGS+=	-mno-retpoline -fno-fixup-gadgets -fno-ret-protector
 
 DEBUG?=		-g
 COPTS?=		-O2

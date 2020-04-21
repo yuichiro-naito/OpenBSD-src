@@ -1396,7 +1396,7 @@ KIDTVEC(softtty)
 	movl	$X86_SOFTINTR_SOFTTTY,%edi
 	call	_C_LABEL(softintr_dispatch)
 	decl	CPUVAR(IDEPTH)
-	jmp	retpoline_r13
+	jmp	*%r13
 
 KIDTVEC(softnet)
 	movl	$IPL_SOFTNET, CPUVAR(ILEVEL)
@@ -1405,7 +1405,7 @@ KIDTVEC(softnet)
 	movl	$X86_SOFTINTR_SOFTNET,%edi
 	call	_C_LABEL(softintr_dispatch)
 	decl	CPUVAR(IDEPTH)
-	jmp	retpoline_r13
+	jmp	*%r13
 
 KIDTVEC(softclock)
 	movl	$IPL_SOFTCLOCK, CPUVAR(ILEVEL)
@@ -1414,4 +1414,4 @@ KIDTVEC(softclock)
 	movl	$X86_SOFTINTR_SOFTCLOCK,%edi
 	call	_C_LABEL(softintr_dispatch)
 	decl	CPUVAR(IDEPTH)
-	jmp	retpoline_r13
+	jmp	*%r13
