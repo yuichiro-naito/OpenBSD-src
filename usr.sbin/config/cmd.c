@@ -57,6 +57,8 @@ cmd_table_t cmd_table[] = {
 	{"exit",   Xexit,	"",		"Exit, without saving changes"},
 	{"quit",   Xquit,	"",		"Quit, saving current changes"},
 	{"nkmempg", Xnkmempg,	"[number]",	"Show/change NKMEMPAGES"},
+	{"pts_disable", Xpts_disable,	"[number]",	"disable PTS mitigation if 1"},
+	{"mds_disable", Xmds_disable,	"[number]",	"disable MDS mitigation if 1"},
 	{NULL,     NULL,	NULL,		NULL}
 };
 
@@ -271,5 +273,19 @@ int
 Xnkmempg(cmd_t *cmd)
 {
 	int_variable_adjust(cmd, I_NKMEMPG, "nkmempages");
+	return (CMD_CONT);
+}
+
+int
+Xpts_disable(cmd_t *cmd)
+{
+	int_variable_adjust(cmd, I_PTS_DISABLE, "pts_disable");
+	return (CMD_CONT);
+}
+
+int
+Xmds_disable(cmd_t *cmd)
+{
+	int_variable_adjust(cmd, I_MDS_DISABLE, "mds_disable");
 	return (CMD_CONT);
 }
