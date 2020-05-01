@@ -1,4 +1,4 @@
-/*	$OpenBSD: init_sysent.c,v 1.218 2020/03/18 19:35:00 anton Exp $	*/
+/*	$OpenBSD$	*/
 
 /*
  * System call switch table.
@@ -23,13 +23,13 @@ struct sysent sysent[] = {
 	    sys_exit },				/* 1 = exit */
 	{ 0, 0, 0,
 	    sys_fork },				/* 2 = fork */
-	{ 3, s(struct sys_read_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_read_args), 0,
 	    sys_read },				/* 3 = read */
-	{ 3, s(struct sys_write_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_write_args), 0,
 	    sys_write },			/* 4 = write */
 	{ 3, s(struct sys_open_args), 0,
 	    sys_open },				/* 5 = open */
-	{ 1, s(struct sys_close_args), SY_NOLOCK | 0,
+	{ 1, s(struct sys_close_args), 0,
 	    sys_close },			/* 6 = close */
 	{ 2, s(struct sys_getentropy_args), SY_NOLOCK | 0,
 	    sys_getentropy },			/* 7 = getentropy */
@@ -76,11 +76,11 @@ struct sysent sysent[] = {
 	{ 0, 0, 0,
 	    sys_nosys },			/* 26 = unimplemented ptrace */
 #endif
-	{ 3, s(struct sys_recvmsg_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_recvmsg_args), 0,
 	    sys_recvmsg },			/* 27 = recvmsg */
-	{ 3, s(struct sys_sendmsg_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_sendmsg_args), 0,
 	    sys_sendmsg },			/* 28 = sendmsg */
-	{ 6, s(struct sys_recvfrom_args), SY_NOLOCK | 0,
+	{ 6, s(struct sys_recvfrom_args), 0,
 	    sys_recvfrom },			/* 29 = recvfrom */
 	{ 3, s(struct sys_accept_args), 0,
 	    sys_accept },			/* 30 = accept */
@@ -104,7 +104,7 @@ struct sysent sysent[] = {
 	    sys_getppid },			/* 39 = getppid */
 	{ 2, s(struct sys_lstat_args), 0,
 	    sys_lstat },			/* 40 = lstat */
-	{ 1, s(struct sys_dup_args), SY_NOLOCK | 0,
+	{ 1, s(struct sys_dup_args), 0,
 	    sys_dup },				/* 41 = dup */
 	{ 4, s(struct sys_fstatat_args), 0,
 	    sys_fstatat },			/* 42 = fstatat */
@@ -140,7 +140,7 @@ struct sysent sysent[] = {
 	    sys_sigpending },			/* 52 = sigpending */
 	{ 2, s(struct sys_fstat_args), 0,
 	    sys_fstat },			/* 53 = fstat */
-	{ 3, s(struct sys_ioctl_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_ioctl_args), 0,
 	    sys_ioctl },			/* 54 = ioctl */
 	{ 1, s(struct sys_reboot_args), 0,
 	    sys_reboot },			/* 55 = reboot */
@@ -168,7 +168,7 @@ struct sysent sysent[] = {
 	    sys_vfork },			/* 66 = vfork */
 	{ 2, s(struct sys_gettimeofday_args), SY_NOLOCK | 0,
 	    sys_gettimeofday },			/* 67 = gettimeofday */
-	{ 2, s(struct sys_settimeofday_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_settimeofday_args), 0,
 	    sys_settimeofday },			/* 68 = settimeofday */
 	{ 3, s(struct sys_setitimer_args), 0,
 	    sys_setitimer },			/* 69 = setitimer */
@@ -208,25 +208,25 @@ struct sysent sysent[] = {
 	    sys_kbind },			/* 86 = kbind */
 	{ 2, s(struct sys_clock_gettime_args), SY_NOLOCK | 0,
 	    sys_clock_gettime },		/* 87 = clock_gettime */
-	{ 2, s(struct sys_clock_settime_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_clock_settime_args), 0,
 	    sys_clock_settime },		/* 88 = clock_settime */
 	{ 2, s(struct sys_clock_getres_args), SY_NOLOCK | 0,
 	    sys_clock_getres },			/* 89 = clock_getres */
-	{ 2, s(struct sys_dup2_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_dup2_args), 0,
 	    sys_dup2 },				/* 90 = dup2 */
-	{ 2, s(struct sys_nanosleep_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_nanosleep_args), 0,
 	    sys_nanosleep },			/* 91 = nanosleep */
-	{ 3, s(struct sys_fcntl_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_fcntl_args), 0,
 	    sys_fcntl },			/* 92 = fcntl */
 	{ 4, s(struct sys_accept4_args), 0,
 	    sys_accept4 },			/* 93 = accept4 */
-	{ 5, s(struct sys___thrsleep_args), SY_NOLOCK | 0,
+	{ 5, s(struct sys___thrsleep_args), 0,
 	    sys___thrsleep },			/* 94 = __thrsleep */
 	{ 1, s(struct sys_fsync_args), 0,
 	    sys_fsync },			/* 95 = fsync */
 	{ 3, s(struct sys_setpriority_args), 0,
 	    sys_setpriority },			/* 96 = setpriority */
-	{ 3, s(struct sys_socket_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_socket_args), 0,
 	    sys_socket },			/* 97 = socket */
 	{ 3, s(struct sys_connect_args), 0,
 	    sys_connect },			/* 98 = connect */
@@ -234,9 +234,9 @@ struct sysent sysent[] = {
 	    sys_getdents },			/* 99 = getdents */
 	{ 2, s(struct sys_getpriority_args), 0,
 	    sys_getpriority },			/* 100 = getpriority */
-	{ 2, s(struct sys_pipe2_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_pipe2_args), 0,
 	    sys_pipe2 },			/* 101 = pipe2 */
-	{ 3, s(struct sys_dup3_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_dup3_args), 0,
 	    sys_dup3 },				/* 102 = dup3 */
 	{ 1, s(struct sys_sigreturn_args), 0,
 	    sys_sigreturn },			/* 103 = sigreturn */
@@ -272,9 +272,9 @@ struct sysent sysent[] = {
 	    sys_getsockopt },			/* 118 = getsockopt */
 	{ 3, s(struct sys_thrkill_args), 0,
 	    sys_thrkill },			/* 119 = thrkill */
-	{ 3, s(struct sys_readv_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_readv_args), 0,
 	    sys_readv },			/* 120 = readv */
-	{ 3, s(struct sys_writev_args), SY_NOLOCK | 0,
+	{ 3, s(struct sys_writev_args), 0,
 	    sys_writev },			/* 121 = writev */
 	{ 2, s(struct sys_kill_args), 0,
 	    sys_kill },				/* 122 = kill */
@@ -294,15 +294,15 @@ struct sysent sysent[] = {
 	    sys_nosys },			/* 129 = obsolete otruncate */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 130 = obsolete oftruncate */
-	{ 2, s(struct sys_flock_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_flock_args), 0,
 	    sys_flock },			/* 131 = flock */
 	{ 2, s(struct sys_mkfifo_args), 0,
 	    sys_mkfifo },			/* 132 = mkfifo */
-	{ 6, s(struct sys_sendto_args), SY_NOLOCK | 0,
+	{ 6, s(struct sys_sendto_args), 0,
 	    sys_sendto },			/* 133 = sendto */
 	{ 2, s(struct sys_shutdown_args), 0,
 	    sys_shutdown },			/* 134 = shutdown */
-	{ 4, s(struct sys_socketpair_args), SY_NOLOCK | 0,
+	{ 4, s(struct sys_socketpair_args), 0,
 	    sys_socketpair },			/* 135 = socketpair */
 	{ 2, s(struct sys_mkdir_args), 0,
 	    sys_mkdir },			/* 136 = mkdir */
@@ -312,7 +312,7 @@ struct sysent sysent[] = {
 	    sys_nosys },			/* 138 = obsolete t32_utimes */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 139 = obsolete 4.2 sigreturn */
-	{ 2, s(struct sys_adjtime_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_adjtime_args), 0,
 	    sys_adjtime },			/* 140 = adjtime */
 	{ 2, s(struct sys_getlogin_r_args), 0,
 	    sys_getlogin_r },			/* 141 = getlogin_r */
@@ -383,9 +383,9 @@ struct sysent sysent[] = {
 	    sys_nosys },			/* 171 = obsolete shmsys10 */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 172 = unimplemented */
-	{ 5, s(struct sys_pread_args), SY_NOLOCK | 0,
+	{ 5, s(struct sys_pread_args), 0,
 	    sys_pread },			/* 173 = pread */
-	{ 5, s(struct sys_pwrite_args), SY_NOLOCK | 0,
+	{ 5, s(struct sys_pwrite_args), 0,
 	    sys_pwrite },			/* 174 = pwrite */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 175 = unimplemented ntp_gettime */
@@ -425,9 +425,9 @@ struct sysent sysent[] = {
 	    sys_fpathconf },			/* 192 = fpathconf */
 	{ 3, s(struct sys_swapctl_args), 0,
 	    sys_swapctl },			/* 193 = swapctl */
-	{ 2, s(struct sys_getrlimit_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_getrlimit_args), 0,
 	    sys_getrlimit },			/* 194 = getrlimit */
-	{ 2, s(struct sys_setrlimit_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_setrlimit_args), 0,
 	    sys_setrlimit },			/* 195 = setrlimit */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 196 = obsolete ogetdirentries48 */
@@ -590,7 +590,7 @@ struct sysent sysent[] = {
 	    sys_nosys },			/* 261 = unimplemented */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 262 = unimplemented */
-	{ 1, s(struct sys_pipe_args), SY_NOLOCK | 0,
+	{ 1, s(struct sys_pipe_args), 0,
 	    sys_pipe },				/* 263 = pipe */
 	{ 2, s(struct sys_fhopen_args), 0,
 	    sys_fhopen },			/* 264 = fhopen */
@@ -598,11 +598,11 @@ struct sysent sysent[] = {
 	    sys_nosys },			/* 265 = unimplemented */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 266 = unimplemented */
-	{ 5, s(struct sys_preadv_args), SY_NOLOCK | 0,
+	{ 5, s(struct sys_preadv_args), 0,
 	    sys_preadv },			/* 267 = preadv */
-	{ 5, s(struct sys_pwritev_args), SY_NOLOCK | 0,
+	{ 5, s(struct sys_pwritev_args), 0,
 	    sys_pwritev },			/* 268 = pwritev */
-	{ 0, 0, SY_NOLOCK | 0,
+	{ 0, 0, 0,
 	    sys_kqueue },			/* 269 = kqueue */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 270 = obsolete t32_kevent */
@@ -638,7 +638,7 @@ struct sysent sysent[] = {
 	    sys_nosys },			/* 285 = obsolete sys_omquery */
 	{ 7, s(struct sys_mquery_args), 0,
 	    sys_mquery },			/* 286 = mquery */
-	{ 1, s(struct sys_closefrom_args), SY_NOLOCK | 0,
+	{ 1, s(struct sys_closefrom_args), 0,
 	    sys_closefrom },			/* 287 = closefrom */
 	{ 2, s(struct sys_sigaltstack_args), 0,
 	    sys_sigaltstack },			/* 288 = sigaltstack */
@@ -691,7 +691,7 @@ struct sysent sysent[] = {
 	    sys_getthrid },			/* 299 = getthrid */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 300 = obsolete t32___thrsleep */
-	{ 2, s(struct sys___thrwakeup_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys___thrwakeup_args), 0,
 	    sys___thrwakeup },			/* 301 = __thrwakeup */
 	{ 1, s(struct sys___threxit_args), 0,
 	    sys___threxit },			/* 302 = __threxit */
@@ -699,7 +699,7 @@ struct sysent sysent[] = {
 	    sys___thrsigdivert },		/* 303 = __thrsigdivert */
 	{ 2, s(struct sys___getcwd_args), 0,
 	    sys___getcwd },			/* 304 = __getcwd */
-	{ 2, s(struct sys_adjfreq_args), SY_NOLOCK | 0,
+	{ 2, s(struct sys_adjfreq_args), 0,
 	    sys_adjfreq },			/* 305 = adjfreq */
 	{ 0, 0, 0,
 	    sys_nosys },			/* 306 = obsolete getfsstat53 */
