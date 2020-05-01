@@ -237,11 +237,11 @@ fd_getfile(struct filedesc *fdp, int fd)
 	if ((u_int)fd >= fdp->fd_nfiles)
 		return (NULL);
 
-	mtx_enter(&fdp->fd_fplock);
+//	mtx_enter(&fdp->fd_fplock);
 	fp = fdp->fd_ofiles[fd];
 	if (fp != NULL)
 		atomic_inc_int(&fp->f_count);
-	mtx_leave(&fdp->fd_fplock);
+//	mtx_leave(&fdp->fd_fplock);
 
 	return (fp);
 }
@@ -673,9 +673,9 @@ finishdup(struct proc *p, struct file *fp, int old, int new,
 	 * Use `fd_fplock' to synchronize with fd_getfile() so that
 	 * the function no longer creates a new reference to the old file.
 	 */
-	mtx_enter(&fdp->fd_fplock);
+//	mtx_enter(&fdp->fd_fplock);
 	fdp->fd_ofiles[new] = fp;
-	mtx_leave(&fdp->fd_fplock);
+//	mtx_leave(&fdp->fd_fplock);
 
 	fdp->fd_ofileflags[new] = fdp->fd_ofileflags[old] & ~UF_EXCLOSE;
 	if (dupflags & DUPF_CLOEXEC)
@@ -733,9 +733,9 @@ fdremove(struct filedesc *fdp, int fd)
 	 * Use `fd_fplock' to synchronize with fd_getfile() so that
 	 * the function no longer creates a new reference to the file.
 	 */
-	mtx_enter(&fdp->fd_fplock);
+//	mtx_enter(&fdp->fd_fplock);
 	fdp->fd_ofiles[fd] = NULL;
-	mtx_leave(&fdp->fd_fplock);
+//	mtx_leave(&fdp->fd_fplock);
 
 	fdp->fd_ofileflags[fd] = 0;
 
