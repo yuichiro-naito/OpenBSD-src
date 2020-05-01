@@ -45,7 +45,9 @@
 #define I_PDEVSIZE	15
 #define S_PDEVINIT	16
 #define I_NKMEMPG	17
-#define NLENTRIES	18
+#define I_PTS_DISABLE	18
+#define I_MDS_DISABLE	19
+#define NLENTRIES	20
 
 #ifdef UKC_MAIN
 struct nlist nl[] = {
@@ -67,6 +69,8 @@ struct nlist nl[] = {
 	{ "_pdevnames_size" },
 	{ "_pdevinit" },
 	{ "_nkmempages" },
+	{ "_pts_disable" },
+	{ "_mds_disable" },
 	{ NULL },
 };
 int	maxdev = 0;

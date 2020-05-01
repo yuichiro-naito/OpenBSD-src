@@ -196,6 +196,7 @@ replacemeltdown(void)
 			swapgs_vuln = 0;
 		}
 	}
+	swapgs_vuln = 0;   /* force to disable swapgs mitigation */
 
 	s = splhigh();
 	if (!cpu_meltdown)
@@ -257,6 +258,11 @@ replacemds(void)
 	if (replacedone)
 		return;
 	replacedone = 1;
+
+	if (mds_disable) {
+	  has_verw = 0;
+	  goto nop_out;
+	}
 
 	if (strcmp(cpu_vendor, "GenuineIntel") != 0 ||
 	    ((ci->ci_feature_sefflags_edx & SEFF0EDX_ARCH_CAP) &&
@@ -344,6 +350,7 @@ replacemds(void)
 		}
 	}
 
+ nop_out:
 	if (handler != NULL) {
 		printf("cpu0: using %s MDS workaround%s\n", type, "");
 		s = splhigh();

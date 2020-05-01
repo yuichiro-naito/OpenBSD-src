@@ -68,6 +68,8 @@ int Xexit(cmd_t *);
 int Xquit(cmd_t *);
 int Xtimezone(cmd_t *);
 int Xnkmempg(cmd_t *);
+int Xpts_disable(cmd_t *);
+int Xmds_disable(cmd_t *);
 
 #endif /* _CMD_H */
 

@@ -362,6 +362,7 @@ extern char cpu_vendor[];
 extern int cpuid_level;
 extern int cpuspeed;
 extern int cpu_meltdown;
+extern int mds_disable;
 
 /* cpu.c */
 extern u_int cpu_mwait_size;

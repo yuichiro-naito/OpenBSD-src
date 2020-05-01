@@ -90,6 +90,7 @@
 #define KUENTRY(x) \
 	KUTEXT; _ALIGN_TRAPS; _GENTRY(x)
 
+#if 0
 /* Return stack refill, to prevent speculation attacks on natural returns */
 #define	RET_STACK_REFILL_WITH_RCX	\
 		mov	$8,%rcx		; \
@@ -106,6 +107,9 @@
 		_ALIGN_TRAPS		; \
 	7:	loop	3b		; \
 		add	$(16*8),%rsp
+#else
+#define	RET_STACK_REFILL_WITH_RCX
+#endif
 
 #endif /* _KERNEL */
 

@@ -140,7 +140,7 @@ KIDTVEC(spllower)
 	btrq	%rax,CPUVAR(IPENDING)
 	movq	CPUVAR(ISOURCES)(,%rax,8),%rax
 	movq    IS_RECURSE(%rax),%rax
-	jmp     retpoline_rax
+	jmp	*%rax
 
 /*
  * Handle return from interrupt after device handler finishes.
@@ -166,4 +166,4 @@ KIDTVEC(doreti)
 	btrq    %rax,CPUVAR(IPENDING)
 	movq	CPUVAR(ISOURCES)(,%rax, 8),%rax
 	movq    IS_RESUME(%rax),%rax
-	jmp     retpoline_rax
+	jmp	*%rax

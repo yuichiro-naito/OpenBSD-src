@@ -178,6 +178,8 @@ _C_LABEL(lapic_isr):
 	.globl	_C_LABEL(pg_nx)
 	.globl	_C_LABEL(pg_g_kern)
 	.globl	_C_LABEL(cpu_meltdown)
+	.globl	_C_LABEL(pts_disable)
+	.globl	_C_LABEL(mds_disable)
 _C_LABEL(cpu_id):	.long	0	# saved from `cpuid' instruction
 _C_LABEL(cpu_feature):	.long	0	# feature flags from 'cpuid'
 					#   instruction
@@ -213,6 +215,8 @@ _C_LABEL(pg_g_kern):	.quad	0	# 0x100 if global pages should be used
 					# in kernel mappings, 0 otherwise (for
 					# insecure CPUs)
 _C_LABEL(cpu_meltdown):	.long	0	# 1 if this CPU has Meltdown
+_C_LABEL(pts_disable):	.long	1	# disable PTS if 1
+_C_LABEL(mds_disable):	.long	1	# disable MDS mitigation if 1
 
 /*****************************************************************************/
 
@@ -223,7 +227,7 @@ _C_LABEL(cpu_meltdown):	.long	0	# 1 if this CPU has Meltdown
 	.section .rodata
 	.globl	_C_LABEL(sigcode)
 _C_LABEL(sigcode):
-	call	1f
+	call	*%rax
 	movq	%rsp,%rdi
 	pushq	%rdi			/* fake return address */
 	movq	$SYS_sigreturn,%rax
@@ -505,7 +509,10 @@ ENTRY(cpu_idle_cycle)
 	RETGUARD_SETUP(cpu_idle_cycle, r11)
 	movq	_C_LABEL(cpu_idle_cycle_fcn),%rax
 	cmpq	$0,%rax
-	jne	retpoline_rax
+	je	1f
+	call	*%rax
+	ret
+1:
 	sti
 	hlt
 	RETGUARD_CHECK(cpu_idle_cycle, r11)
@@ -757,8 +764,7 @@ NENTRY(proc_trampoline)
 #endif
 	movl	$IPL_NONE,CPUVAR(ILEVEL)
 	movq	%r13,%rdi
-	movq	%r12,%rax
-	call	retpoline_rax
+	call	*%r12
 	movq	CPUVAR(CURPROC),%r14
 	jmp	.Lsyscall_check_asts
 

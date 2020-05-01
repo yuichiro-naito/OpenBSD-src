@@ -51,12 +51,12 @@
 0	INDIR		{ int sys_syscall(int number, ...); }
 1	STD		{ void sys_exit(int rval); }
 2	STD		{ int sys_fork(void); }
-3	STD NOLOCK	{ ssize_t sys_read(int fd, void *buf, size_t nbyte); }
-4	STD NOLOCK	{ ssize_t sys_write(int fd, const void *buf, \
+3	STD		{ ssize_t sys_read(int fd, void *buf, size_t nbyte); }
+4	STD		{ ssize_t sys_write(int fd, const void *buf, \
 			    size_t nbyte); }
 5	STD		{ int sys_open(const char *path, \
 			    int flags, ... mode_t mode); }
-6	STD NOLOCK	{ int sys_close(int fd); }
+6	STD		{ int sys_close(int fd); }
 7	STD NOLOCK	{ int sys_getentropy(void *buf, size_t nbyte); }
 8	STD		{ int sys___tfork(const struct __tfork *param, \
 			    size_t psize); }
@@ -88,11 +88,11 @@
 #else
 26	UNIMPL		ptrace
 #endif
-27	STD NOLOCK	{ ssize_t sys_recvmsg(int s, struct msghdr *msg, \
+27	STD		{ ssize_t sys_recvmsg(int s, struct msghdr *msg, \
 			    int flags); }
-28	STD NOLOCK	{ ssize_t sys_sendmsg(int s, \
+28	STD		{ ssize_t sys_sendmsg(int s, \
 			    const struct msghdr *msg, int flags); }
-29	STD NOLOCK	{ ssize_t sys_recvfrom(int s, void *buf, size_t len, \
+29	STD		{ ssize_t sys_recvfrom(int s, void *buf, size_t len, \
 			    int flags, struct sockaddr *from, \
 			    socklen_t *fromlenaddr); }
 30	STD		{ int sys_accept(int s, struct sockaddr *name, \
@@ -109,7 +109,7 @@
 38	STD		{ int sys_stat(const char *path, struct stat *ub); }
 39	STD		{ pid_t sys_getppid(void); }
 40	STD		{ int sys_lstat(const char *path, struct stat *ub); }
-41	STD NOLOCK	{ int sys_dup(int fd); }
+41	STD		{ int sys_dup(int fd); }
 42	STD		{ int sys_fstatat(int fd, const char *path, \
 			    struct stat *buf, int flag); }
 43	STD NOLOCK	{ gid_t sys_getegid(void); }
@@ -135,7 +135,7 @@
 #endif
 52	STD		{ int sys_sigpending(void); }
 53	STD		{ int sys_fstat(int fd, struct stat *sb); }
-54	STD NOLOCK	{ int sys_ioctl(int fd, \
+54	STD		{ int sys_ioctl(int fd, \
 			    u_long com, ... void *data); }
 55	STD		{ int sys_reboot(int opt); }
 56	STD		{ int sys_revoke(const char *path); }
@@ -157,7 +157,7 @@
 66	STD		{ int sys_vfork(void); }
 67	STD NOLOCK	{ int sys_gettimeofday(struct timeval *tp, \
 			    struct timezone *tzp); }
-68	STD NOLOCK	{ int sys_settimeofday(const struct timeval *tv, \
+68	STD		{ int sys_settimeofday(const struct timeval *tv, \
 			    const struct timezone *tzp); }
 69	STD		{ int sys_setitimer(int which, \
 			    const struct itimerval *itv, \
@@ -196,28 +196,28 @@
 			    size_t psize, int64_t proc_cookie); }
 87	STD NOLOCK	{ int sys_clock_gettime(clockid_t clock_id, \
 			    struct timespec *tp); }
-88	STD NOLOCK	{ int sys_clock_settime(clockid_t clock_id, \
+88	STD		{ int sys_clock_settime(clockid_t clock_id, \
 			    const struct timespec *tp); }
 89	STD NOLOCK	{ int sys_clock_getres(clockid_t clock_id, \
 			    struct timespec *tp); }
-90	STD NOLOCK	{ int sys_dup2(int from, int to); }
-91	STD NOLOCK	{ int sys_nanosleep(const struct timespec *rqtp, \
+90	STD		{ int sys_dup2(int from, int to); }
+91	STD		{ int sys_nanosleep(const struct timespec *rqtp, \
 			    struct timespec *rmtp); }
-92	STD NOLOCK	{ int sys_fcntl(int fd, int cmd, ... void *arg); }
+92	STD		{ int sys_fcntl(int fd, int cmd, ... void *arg); }
 93	STD		{ int sys_accept4(int s, struct sockaddr *name, \
 			    socklen_t *anamelen, int flags); }
-94	STD NOLOCK	{ int sys___thrsleep(const volatile void *ident, \
+94	STD		{ int sys___thrsleep(const volatile void *ident, \
 			    clockid_t clock_id, const struct timespec *tp, \
 			    void *lock, const int *abort); }
 95	STD		{ int sys_fsync(int fd); }
 96	STD		{ int sys_setpriority(int which, id_t who, int prio); }
-97	STD NOLOCK	{ int sys_socket(int domain, int type, int protocol); }
+97	STD		{ int sys_socket(int domain, int type, int protocol); }
 98	STD		{ int sys_connect(int s, const struct sockaddr *name, \
 			    socklen_t namelen); }
 99	STD		{ int sys_getdents(int fd, void *buf, size_t buflen); }
 100	STD		{ int sys_getpriority(int which, id_t who); }
-101	STD NOLOCK	{ int sys_pipe2(int *fdp, int flags); }
-102	STD NOLOCK	{ int sys_dup3(int from, int to, int flags); }
+101	STD		{ int sys_pipe2(int *fdp, int flags); }
+102	STD		{ int sys_dup3(int from, int to, int flags); }
 103	STD		{ int sys_sigreturn(struct sigcontext *sigcntxp); }
 104	STD		{ int sys_bind(int s, const struct sockaddr *name, \
 			    socklen_t namelen); }
@@ -247,9 +247,9 @@
 118	STD		{ int sys_getsockopt(int s, int level, int name, \
 			    void *val, socklen_t *avalsize); }
 119	STD		{ int sys_thrkill(pid_t tid, int signum, void *tcb); }
-120	STD NOLOCK	{ ssize_t sys_readv(int fd, \
+120	STD		{ ssize_t sys_readv(int fd, \
 			    const struct iovec *iovp, int iovcnt); }
-121	STD NOLOCK	{ ssize_t sys_writev(int fd, \
+121	STD		{ ssize_t sys_writev(int fd, \
 			    const struct iovec *iovp, int iovcnt); }
 122	STD		{ int sys_kill(int pid, int signum); }
 123	STD		{ int sys_fchown(int fd, uid_t uid, gid_t gid); }
@@ -260,19 +260,19 @@
 128	STD		{ int sys_rename(const char *from, const char *to); }
 129	OBSOL		otruncate
 130	OBSOL		oftruncate
-131	STD NOLOCK	{ int sys_flock(int fd, int how); }
+131	STD		{ int sys_flock(int fd, int how); }
 132	STD		{ int sys_mkfifo(const char *path, mode_t mode); }
-133	STD NOLOCK	{ ssize_t sys_sendto(int s, const void *buf, \
+133	STD		{ ssize_t sys_sendto(int s, const void *buf, \
 			    size_t len, int flags, const struct sockaddr *to, \
 			    socklen_t tolen); }
 134	STD		{ int sys_shutdown(int s, int how); }
-135	STD NOLOCK	{ int sys_socketpair(int domain, int type, \
+135	STD		{ int sys_socketpair(int domain, int type, \
 			    int protocol, int *rsv); }
 136	STD		{ int sys_mkdir(const char *path, mode_t mode); }
 137	STD		{ int sys_rmdir(const char *path); }
 138	OBSOL		t32_utimes
 139	OBSOL		4.2 sigreturn
-140	STD NOLOCK	{ int sys_adjtime(const struct timeval *delta, \
+140	STD		{ int sys_adjtime(const struct timeval *delta, \
 			    struct timeval *olddelta); }
 141	STD		{ int sys_getlogin_r(char *namebuf, u_int namelen); }
 142	OBSOL		ogethostid
@@ -316,9 +316,9 @@
 170	OBSOL		msgsys10
 171	OBSOL		shmsys10
 172	UNIMPL
-173	STD NOLOCK	{ ssize_t sys_pread(int fd, void *buf, \
+173	STD		{ ssize_t sys_pread(int fd, void *buf, \
 			  size_t nbyte, int pad, off_t offset); }
-174	STD NOLOCK	{ ssize_t sys_pwrite(int fd, const void *buf, \
+174	STD		{ ssize_t sys_pwrite(int fd, const void *buf, \
 			  size_t nbyte, int pad, off_t offset); }
 175	UNIMPL		ntp_gettime
 176	UNIMPL		ntp_adjtime
@@ -341,9 +341,9 @@
 191	STD		{ long sys_pathconf(const char *path, int name); }
 192	STD		{ long sys_fpathconf(int fd, int name); }
 193	STD		{ int sys_swapctl(int cmd, const void *arg, int misc); }
-194	STD NOLOCK	{ int sys_getrlimit(int which, \
+194	STD		{ int sys_getrlimit(int which, \
 			    struct rlimit *rlp); }
-195	STD NOLOCK	{ int sys_setrlimit(int which, \
+195	STD		{ int sys_setrlimit(int which, \
 			    const struct rlimit *rlp); }
 196	OBSOL		ogetdirentries48
 197	STD		{ void *sys_mmap(void *addr, size_t len, int prot, \
@@ -448,17 +448,17 @@
 260	UNIMPL
 261	UNIMPL
 262	UNIMPL
-263	STD NOLOCK	{ int sys_pipe(int *fdp); }
+263	STD		{ int sys_pipe(int *fdp); }
 264	STD		{ int sys_fhopen(const fhandle_t *fhp, int flags); }
 265	UNIMPL
 266	UNIMPL
-267	STD NOLOCK	{ ssize_t sys_preadv(int fd, \
+267	STD		{ ssize_t sys_preadv(int fd, \
 			  const struct iovec *iovp, int iovcnt, \
 			  int pad, off_t offset); }
-268	STD NOLOCK	{ ssize_t sys_pwritev(int fd, \
+268	STD		{ ssize_t sys_pwritev(int fd, \
 			  const struct iovec *iovp, int iovcnt, \
 			  int pad, off_t offset); }
-269	STD NOLOCK	{ int sys_kqueue(void); }
+269	STD		{ int sys_kqueue(void); }
 270	OBSOL		t32_kevent
 271	STD		{ int sys_mlockall(int flags); }
 272	STD		{ int sys_munlockall(void); }
@@ -481,7 +481,7 @@
 285	OBSOL		sys_omquery
 286	STD		{ void *sys_mquery(void *addr, size_t len, int prot, \
 			    int flags, int fd, long pad, off_t pos); }
-287	STD NOLOCK	{ int sys_closefrom(int fd); }
+287	STD		{ int sys_closefrom(int fd); }
 288	STD		{ int sys_sigaltstack(const struct sigaltstack *nss, \
 			    struct sigaltstack *oss); }
 #ifdef SYSVSHM
@@ -521,13 +521,13 @@
 298	STD		{ int sys_sched_yield(void); }
 299	STD NOLOCK	{ pid_t sys_getthrid(void); }
 300	OBSOL		t32___thrsleep
-301	STD NOLOCK	{ int sys___thrwakeup(const volatile void *ident, \
+301	STD		{ int sys___thrwakeup(const volatile void *ident, \
 			    int n); }
 302	STD		{ void sys___threxit(pid_t *notdead); }
 303	STD		{ int sys___thrsigdivert(sigset_t sigmask, \
 			    siginfo_t *info, const struct timespec *timeout); }
 304	STD		{ int sys___getcwd(char *buf, size_t len); }
-305	STD NOLOCK	{ int sys_adjfreq(const int64_t *freq, \
+305	STD		{ int sys_adjfreq(const int64_t *freq, \
 			    int64_t *oldfreq); }
 306	OBSOL		getfsstat53
 307	OBSOL		statfs53
