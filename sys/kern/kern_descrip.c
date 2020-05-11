@@ -240,7 +240,7 @@ fd_getfile(struct filedesc *fdp, int fd)
 //	mtx_enter(&fdp->fd_fplock);
 	fp = fdp->fd_ofiles[fd];
 	if (fp != NULL)
-		atomic_inc_int(&fp->f_count);
+		fp->f_count++; //atomic_inc_int(&fp->f_count);
 //	mtx_leave(&fdp->fd_fplock);
 
 	return (fp);
@@ -1233,7 +1233,7 @@ closef(struct file *fp, struct proc *p)
 
 	KASSERTMSG(fp->f_count >= 2, "count (%u) < 2", fp->f_count);
 
-	atomic_dec_int(&fp->f_count);
+	fp->f_count--; //atomic_dec_int(&fp->f_count);
 
 	/*
 	 * POSIX record locking dictates that any close releases ALL
