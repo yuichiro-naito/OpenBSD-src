@@ -287,6 +287,12 @@ ba_new0(void *val, enum bt_argtype type)
 	return ba;
 }
 
+void
+ba_free(struct bt_arg *ba)
+{
+	free(ba);
+}
+
 /*
  * Link two arguments together, to build an argument list used in
  * function calls.

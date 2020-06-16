@@ -747,7 +747,7 @@ stmt_print(struct bt_stmt *bs, struct dt_evt *dtev)
 void
 stmt_store(struct bt_stmt *bs, struct dt_evt *dtev)
 {
-	struct bt_arg *ba = SLIST_FIRST(&bs->bs_args);
+	struct bt_arg *olda, *ba = SLIST_FIRST(&bs->bs_args);
 	struct bt_var *bv = bs->bs_var;
 
 	assert(SLIST_NEXT(ba, ba_next) == NULL);
@@ -757,10 +757,14 @@ stmt_store(struct bt_stmt *bs, struct dt_evt *dtev)
 		bv->bv_value = ba;
 		break;
 	case B_AT_BI_NSECS:
+		olda = bv->bv_value;
 		bv->bv_value = ba_new(builtin_nsecs(dtev), B_AT_LONG);
+		ba_free(olda);
 		break;
 	case B_AT_OP_ADD ... B_AT_OP_DIVIDE:
+		olda = bv->bv_value;
 		bv->bv_value = ba_new(ba2long(ba, dtev), B_AT_LONG);
+		ba_free(olda);
 		break;
 	default:
 		xabort("store not implemented for type %d", ba->ba_type);
