@@ -928,7 +928,7 @@ ba2long(struct bt_arg *ba, struct dt_evt *dtev)
 const char *
 ba2str(struct bt_arg *ba, struct dt_evt *dtev)
 {
-	static char buf[sizeof("18446744073709551615")]; /* UINT64_MAX */
+	static char buf[strlen("18446744073709551615") + 1]; /* UINT64_MAX */
 	struct bt_var *bv;
 	const char *str;
 
@@ -937,7 +937,7 @@ ba2str(struct bt_arg *ba, struct dt_evt *dtev)
 		str = (const char *)ba->ba_value;
 		break;
 	case B_AT_LONG:
-		snprintf(buf, sizeof(buf) - 1, "%ld",(long)ba->ba_value);
+		snprintf(buf, sizeof(buf), "%ld",(long)ba->ba_value);
 		str = buf;
 		break;
 	case B_AT_BI_KSTACK:
@@ -950,26 +950,26 @@ ba2str(struct bt_arg *ba, struct dt_evt *dtev)
 		str = dtev->dtev_comm;
 		break;
 	case B_AT_BI_CPU:
-		snprintf(buf, sizeof(buf) - 1, "%u", dtev->dtev_cpu);
+		snprintf(buf, sizeof(buf), "%u", dtev->dtev_cpu);
 		str = buf;
 		break;
 	case B_AT_BI_PID:
-		snprintf(buf, sizeof(buf) - 1, "%d", dtev->dtev_pid);
+		snprintf(buf, sizeof(buf), "%d", dtev->dtev_pid);
 		str = buf;
 		break;
 	case B_AT_BI_TID:
-		snprintf(buf, sizeof(buf) - 1, "%d", dtev->dtev_tid);
+		snprintf(buf, sizeof(buf), "%d", dtev->dtev_tid);
 		str = buf;
 		break;
 	case B_AT_BI_NSECS:
-		snprintf(buf, sizeof(buf) - 1, "%llu", builtin_nsecs(dtev));
+		snprintf(buf, sizeof(buf), "%llu", builtin_nsecs(dtev));
 		str = buf;
 		break;
 	case B_AT_BI_ARG0 ... B_AT_BI_ARG9:
 		str = builtin_arg(dtev, ba->ba_type);
 		break;
 	case B_AT_BI_RETVAL:
-		snprintf(buf, sizeof(buf) - 1, "%ld", (long)dtev->dtev_sysretval);
+		snprintf(buf, sizeof(buf), "%ld", (long)dtev->dtev_sysretval);
 		str = buf;
 		break;
 	case B_AT_MAP:
@@ -981,7 +981,7 @@ ba2str(struct bt_arg *ba, struct dt_evt *dtev)
 		str = ba2str(ba_read(ba), dtev);
 		break;
 	case B_AT_OP_ADD ... B_AT_OP_DIVIDE:
-		snprintf(buf, sizeof(buf) - 1, "%ld", ba2long(ba, dtev));
+		snprintf(buf, sizeof(buf), "%ld", ba2long(ba, dtev));
 		str = buf;
 		break;
 	case B_AT_MF_COUNT:
