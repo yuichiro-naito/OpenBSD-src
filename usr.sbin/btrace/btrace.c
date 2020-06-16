@@ -634,9 +634,9 @@ builtin_stack(struct dt_evt *dtev, int kernel)
 const char *
 builtin_arg(struct dt_evt *dtev, enum bt_argtype dat)
 {
-	static char buf[sizeof("18446744073709551615")]; /* UINT64_MAX */
+	static char buf[strlen("18446744073709551615") + 1]; /* UINT64_MAX */
 
-	snprintf(buf, sizeof(buf) - 1, "%lu", dtev->dtev_sysargs[dat - B_AT_BI_ARG0]);
+	snprintf(buf, sizeof(buf), "%lu", dtev->dtev_sysargs[dat - B_AT_BI_ARG0]);
 	return buf;
 }
 
