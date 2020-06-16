@@ -287,10 +287,16 @@ ba_new0(void *val, enum bt_argtype type)
 	return ba;
 }
 
-void
-ba_free(struct bt_arg *ba)
+struct bt_arg *
+ba_update0(struct bt_arg *ba, void *val, enum bt_argtype type)
 {
-	free(ba);
+	if (ba == NULL)
+		ba = ba_new0(val, type);
+	else {
+		ba->ba_value = val;
+		ba->ba_type = type;
+	}
+	return ba;
 }
 
 /*

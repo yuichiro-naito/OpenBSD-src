@@ -168,7 +168,8 @@ int			 btparse(const char *, size_t, const char *, int);
 
 #define ba_new(v, t)	 ba_new0((void *)(v), (t))
 struct bt_arg		*ba_new0(void *, enum bt_argtype);
-void			 ba_free(struct bt_arg *ba);
+#define ba_update(a, v, t)	 ba_update0((a), (void *)(v), (t))
+struct bt_arg		*ba_update0(struct bt_arg *ba, void *val, enum bt_argtype type);
 
 const char		*bv_name(struct bt_var *);
 
