@@ -339,7 +339,7 @@ rules_do(int fd)
 			err(1, "incorrect read");
 
 
-		for (i = 0; i < nitems(devtbuf); i++) {
+		for (i = 0; i < (rlen / sizeof(struct dt_evt)); i++) {
 			struct dt_evt *dtev = &devtbuf[i];
 
 			if (dtev->dtev_tid == 0)

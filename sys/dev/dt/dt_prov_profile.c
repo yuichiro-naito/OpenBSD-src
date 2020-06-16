@@ -75,7 +75,7 @@ dt_prov_profile_alloc(struct dt_probe *dtp, struct dt_softc *sc,
 	KASSERT(TAILQ_EMPTY(plist));
 	KASSERT(dtp == dtpp_profile || dtp == dtpp_interval);
 
-	if (dtrq->dtrq_rate <= 0 || dtrq->dtrq_rate >= hz)
+	if (dtrq->dtrq_rate <= 0 || dtrq->dtrq_rate > hz)
 		return EOPNOTSUPP;
 
 	CPU_INFO_FOREACH(cii, ci) {
@@ -88,7 +88,7 @@ dt_prov_profile_alloc(struct dt_probe *dtp, struct dt_softc *sc,
 			return ENOMEM;
 		}
 
-		dp->dp_maxtick = dtrq->dtrq_rate;
+		dp->dp_maxtick = hz / dtrq->dtrq_rate;
 		dp->dp_cpuid = ci->ci_cpuid;
 
 		dp->dp_filter = dtrq->dtrq_filter;
