@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_tc.c,v 1.55 2019/12/12 19:30:21 cheloha Exp $ */
+/*	$OpenBSD: kern_tc.c,v 1.51 2019/11/26 15:27:08 cheloha Exp $ */
 
 /*
  * Copyright (c) 2000 Poul-Henning Kamp <phk@FreeBSD.org>
@@ -460,7 +460,7 @@ tc_setclock(const struct timespec *ts)
 	if (adj_ticks > 0) {
 		if (adj_ticks > INT_MAX)
 			adj_ticks = INT_MAX;
-		timeout_adjust_ticks(adj_ticks);
+		ticks += adj_ticks;
 	}
 #endif
 }
