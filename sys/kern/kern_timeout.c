@@ -490,6 +490,18 @@ timeout_advance_nsec(struct timeout *to, uint64_t nsecs, uint64_t *omissed)
 	return ret;
 }
 
+int
+timeout_add_tv_kclock(struct timeout *to, const struct timeval *tv)
+{
+	struct timespec ts, deadline, now;
+
+	TIMEVAL_TO_TIMESPEC(tv, &ts);
+	kclock_nanotime(to->to_kclock, &now);
+	timespecadd(&now, &ts, &deadline);
+
+	return timeout_at_ts(to, &deadline);
+}
+
 /*
  * Given an interval timer with a period of invtl that most recently
  * expired at absolute time last, find the timer's next absolute
