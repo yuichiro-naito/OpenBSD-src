@@ -461,7 +461,7 @@ static inline bool timer_expired(const struct timeout *t)
 #ifdef __linux__
 	return READ_ONCE(t->expires) && !timer_pending(t);
 #else
-	return READ_ONCE(t->to_time) && !timer_pending(t);
+	return READ_ONCE(t->to_time.tv_sec) && READ_ONCE(t->to_time.tv_nsec) && !timer_pending(t);
 #endif
 }
 

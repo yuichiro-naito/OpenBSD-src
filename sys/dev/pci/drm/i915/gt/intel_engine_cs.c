@@ -1286,7 +1286,7 @@ static struct intel_timeline *get_timeline(struct i915_request *rq)
 
 static const char *repr_timer(const struct timeout *t)
 {
-	if (!READ_ONCE(t->to_time))
+	if (!(READ_ONCE(t->to_time.tv_sec) && READ_ONCE(t->to_time.tv_sec)))
 		return "inactive";
 
 	if (timer_pending(t))

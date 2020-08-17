@@ -87,11 +87,12 @@ bool i915_error_injected(void)
 
 void cancel_timer(struct timeout *t)
 {
-	if (!READ_ONCE(t->to_time))
+	if (!(READ_ONCE(t->to_time.tv_sec) && READ_ONCE(t->to_time.tv_nsec)))
 		return;
 
 	del_timer(t);
-	WRITE_ONCE(t->to_time, 0);
+	WRITE_ONCE(t->to_time.tv_sec, 0);
+	WRITE_ONCE(t->to_time.tv_nsec, 0);
 }
 
 void set_timer_ms(struct timeout *t, unsigned long timeout)
