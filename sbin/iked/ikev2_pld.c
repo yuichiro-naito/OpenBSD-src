@@ -1,4 +1,4 @@
-/*	$OpenBSD: ikev2_pld.c,v 1.88 2020/07/21 08:03:39 tobhe Exp $	*/
+/*	$OpenBSD: ikev2_pld.c,v 1.92 2020/08/16 09:09:17 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -54,8 +54,8 @@ int	 ikev2_pld_sa(struct iked *, struct ikev2_payload *,
 	    struct iked_message *, size_t, size_t);
 int	 ikev2_validate_xform(struct iked_message *, size_t, size_t,
 	    struct ikev2_transform *);
-int	 ikev2_pld_xform(struct iked *, struct ikev2_sa_proposal *,
-	    struct iked_message *, size_t, size_t);
+int	 ikev2_pld_xform(struct iked *, struct iked_message *,
+	    size_t, size_t);
 int	 ikev2_validate_attr(struct iked_message *, size_t, size_t,
 	    struct ikev2_attribute *);
 int	 ikev2_pld_attr(struct iked *, struct ikev2_transform *,
@@ -89,7 +89,7 @@ int	 ikev2_pld_delete(struct iked *, struct ikev2_payload *,
 int	 ikev2_validate_ts(struct iked_message *, size_t, size_t,
 	    struct ikev2_tsp *);
 int	 ikev2_pld_ts(struct iked *, struct ikev2_payload *,
-	    struct iked_message *, size_t, size_t, unsigned int);
+	    struct iked_message *, size_t, size_t);
 int	 ikev2_validate_auth(struct iked_message *, size_t, size_t,
 	    struct ikev2_auth *);
 int	 ikev2_pld_auth(struct iked *, struct ikev2_payload *,
@@ -248,8 +248,7 @@ ikev2_pld_payloads(struct iked *env, struct iked_message *msg,
 			break;
 		case IKEV2_PAYLOAD_TSi | IKED_E:
 		case IKEV2_PAYLOAD_TSr | IKED_E:
-			ret = ikev2_pld_ts(env, &pld, msg, offset, left,
-			    payload);
+			ret = ikev2_pld_ts(env, &pld, msg, offset, left);
 			break;
 		case IKEV2_PAYLOAD_SK:
 			ret = ikev2_pld_e(env, &pld, msg, offset, left);
@@ -430,7 +429,7 @@ ikev2_pld_sa(struct iked *env, struct ikev2_payload *pld,
 		 * Parse the attached transforms
 		 */
 		if (sap.sap_transforms &&
-		    ikev2_pld_xform(env, &sap, msg, offset, total) != 0) {
+		    ikev2_pld_xform(env, msg, offset, total) != 0) {
 			log_debug("%s: invalid proposal transforms", __func__);
 			return (-1);
 		}
@@ -472,8 +471,8 @@ ikev2_validate_xform(struct iked_message *msg, size_t offset, size_t total,
 }
 
 int
-ikev2_pld_xform(struct iked *env, struct ikev2_sa_proposal *sap,
-    struct iked_message *msg, size_t offset, size_t total)
+ikev2_pld_xform(struct iked *env, struct iked_message *msg,
+    size_t offset, size_t total)
 {
 	struct ikev2_transform		 xfrm;
 	char				 id[BUFSIZ];
@@ -540,7 +539,7 @@ ikev2_pld_xform(struct iked *env, struct ikev2_sa_proposal *sap,
 	offset += xfrm_length;
 	total -= xfrm_length;
 	if (xfrm.xfrm_more == IKEV2_XFORM_MORE)
-		ret = ikev2_pld_xform(env, sap, msg, offset, total);
+		ret = ikev2_pld_xform(env, msg, offset, total);
 	else if (total != 0) {
 		/* No more transforms but still some data left. */
 		log_debug("%s: less data than specified, %zu bytes left",
@@ -873,7 +872,7 @@ ikev2_pld_certreq(struct iked *env, struct ikev2_payload *pld,
 		return (-1);
 	}
 	cr->cr_type = cert.cert_type;
-	SLIST_INSERT_HEAD(&msg->msg_parent->msg_certreqs, cr, cr_entry);
+	SIMPLEQ_INSERT_TAIL(&msg->msg_parent->msg_certreqs, cr, cr_entry);
 
 	return (0);
 }
@@ -1484,7 +1483,7 @@ ikev2_pld_delete(struct iked *env, struct ikev2_payload *pld,
 				break;
 			}
 		}
-		log_info("%sdeleted %zu SPI%s: %.*s",
+		log_debug("%sdeleted %zu SPI%s: %.*s",
 		    SPI_SA(sa, NULL), found,
 		    found == 1 ? "" : "s",
 		    spibuf ? ibuf_strlen(spibuf) : 0,
@@ -1526,7 +1525,7 @@ ikev2_validate_ts(struct iked_message *msg, size_t offset, size_t left,
 
 int
 ikev2_pld_ts(struct iked *env, struct ikev2_payload *pld,
-    struct iked_message *msg, size_t offset, size_t left, unsigned int payload)
+    struct iked_message *msg, size_t offset, size_t left)
 {
 	struct ikev2_tsp		 tsp;
 	struct ikev2_ts			 ts;

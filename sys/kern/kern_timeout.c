@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_timeout.c,v 1.77 2020/08/01 08:40:20 anton Exp $	*/
+/*	$OpenBSD: kern_timeout.c,v 1.79 2020/08/07 00:45:25 cheloha Exp $	*/
 /*
  * Copyright (c) 2001 Thomas Nordin <nordin@openbsd.org>
  * Copyright (c) 2000-2001 Artur Grabowski <art@openbsd.org>
@@ -264,6 +264,7 @@ _timeout_set(struct timeout *to, void (*fn)(void *), void *arg, int flags,
 {
 	to->to_func = fn;
 	to->to_arg = arg;
+	to->to_process = NULL;
 	to->to_flags = flags | TIMEOUT_INITIALIZED;
 	to->to_kclock = kclock;
 }
@@ -345,35 +346,6 @@ timeout_add_tv(struct timeout *to, const struct timeval *tv)
 	if (to_ticks > INT_MAX)
 		to_ticks = INT_MAX;
 	if (to_ticks == 0 && tv->tv_usec > 0)
-		to_ticks = 1;
-
-	return timeout_add(to, (int)to_ticks);
-}
-
-int
-timeout_add_ts(struct timeout *to, const struct timespec *ts)
-{
-	uint64_t to_ticks;
-
-	to_ticks = (uint64_t)hz * ts->tv_sec + ts->tv_nsec / (tick * 1000);
-	if (to_ticks > INT_MAX)
-		to_ticks = INT_MAX;
-	if (to_ticks == 0 && ts->tv_nsec > 0)
-		to_ticks = 1;
-
-	return timeout_add(to, (int)to_ticks);
-}
-
-int
-timeout_add_bt(struct timeout *to, const struct bintime *bt)
-{
-	uint64_t to_ticks;
-
-	to_ticks = (uint64_t)hz * bt->sec + (long)(((uint64_t)1000000 *
-	    (uint32_t)(bt->frac >> 32)) >> 32) / tick;
-	if (to_ticks > INT_MAX)
-		to_ticks = INT_MAX;
-	if (to_ticks == 0 && bt->frac > 0)
 		to_ticks = 1;
 
 	return timeout_add(to, (int)to_ticks);
@@ -646,6 +618,7 @@ timeout_barrier(struct timeout *to)
 		struct timeout barrier;
 
 		timeout_set_proc(&barrier, timeout_proc_barrier, &c);
+		barrier.to_process = curproc->p_p;
 
 		mtx_enter(&timeout_mutex);
 		SET(barrier.to_flags, TIMEOUT_ONQUEUE);
@@ -790,11 +763,12 @@ timeout_run(struct timeout *to)
 	mtx_leave(&timeout_mutex);
 	timeout_sync_enter(needsproc);
 #if NKCOV > 0
-	kcov_remote_enter(KCOV_REMOTE_COMMON, to->to_process);
+	struct process *kcov_process = to->to_process;
+	kcov_remote_enter(KCOV_REMOTE_COMMON, kcov_process);
 #endif
 	fn(arg);
 #if NKCOV > 0
-	kcov_remote_leave(KCOV_REMOTE_COMMON, to->to_process);
+	kcov_remote_leave(KCOV_REMOTE_COMMON, kcov_process);
 #endif
 	timeout_sync_leave(needsproc);
 	mtx_enter(&timeout_mutex);

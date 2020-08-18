@@ -1,4 +1,4 @@
-/*	$OpenBSD: config.c,v 1.58 2020/07/23 22:01:08 tobhe Exp $	*/
+/*	$OpenBSD: config.c,v 1.60 2020/08/16 09:09:17 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -739,7 +739,7 @@ config_getpolicy(struct iked *env, struct imsg *imsg)
 {
 	struct iked_policy	*pol;
 	struct iked_proposal	 pp, *prop;
-	struct iked_transform	 xf, *xform;
+	struct iked_transform	 xf;
 	off_t			 offset = 0;
 	unsigned int		 i, j;
 	uint8_t			*buf = (uint8_t *)imsg->data;
@@ -771,9 +771,9 @@ config_getpolicy(struct iked *env, struct imsg *imsg)
 			memcpy(&xf, buf + offset, sizeof(xf));
 			offset += sizeof(xf);
 
-			if ((xform = config_add_transform(prop, xf.xform_type,
+			if (config_add_transform(prop, xf.xform_type,
 			    xf.xform_id, xf.xform_length,
-			    xf.xform_keylength)) == NULL)
+			    xf.xform_keylength) == NULL)
 				fatal("config_getpolicy: add transform");
 		}
 	}
@@ -843,7 +843,7 @@ config_setcompile(struct iked *env, enum privsep_procid id)
 }
 
 int
-config_getcompile(struct iked *env, struct imsg *imsg)
+config_getcompile(struct iked *env)
 {
 	/*
 	 * Do any necessary steps after configuration, for now we

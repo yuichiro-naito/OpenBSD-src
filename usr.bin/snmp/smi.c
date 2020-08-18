@@ -1,4 +1,4 @@
-/*	$OpenBSD: smi.c,v 1.10 2020/08/03 14:45:54 martijn Exp $	*/
+/*	$OpenBSD: smi.c,v 1.12 2020/08/08 13:02:54 martijn Exp $	*/
 
 /*
  * Copyright (c) 2019 Martijn van Duren <martijn@openbsd.org>
@@ -591,17 +591,11 @@ smi_oid2string(struct ber_oid *o, char *buf, size_t len,
 void
 smi_mibtree(struct oid *oids)
 {
-	struct oid	*oid, *decl;
 	size_t		 i;
 
-	for (i = 0; oids[i].o_oid[0] != 0; i++) {
-		oid = &oids[i];
-		if (oid->o_name != NULL) {
-			RB_INSERT(oidtree, &smi_oidtree, oid);
-			RB_INSERT(keytree, &smi_keytree, oid);
-			continue;
-		}
-		decl = RB_FIND(oidtree, &smi_oidtree, oid);
+	for (i = 0; oids[i].o_name != NULL; i++) {
+		RB_INSERT(oidtree, &smi_oidtree, &(oids[i]));
+		RB_INSERT(keytree, &smi_keytree, &(oids[i]));
 	}
 }
 
@@ -642,11 +636,16 @@ smi_displayhint_os(struct textconv *tc, int print_hint, const char *src,
     size_t srclen, int utf8)
 {
 	size_t octetlength, i = 0, j = 0;
+	size_t prefixlen;
 	unsigned long ulval;
 	int clen;
 	char *displayformat;
+	const char *prefix;
 	char *rbuf, *dst;
 	wchar_t wc;
+
+	prefix = print_hint ? "STRING: " : "";
+	prefixlen = strlen(prefix);
 
 	errno = 0;
 	ulval = strtoul(tc->tc_display_hint, &displayformat, 10);
@@ -658,20 +657,15 @@ smi_displayhint_os(struct textconv *tc, int print_hint, const char *src,
 		return NULL;
 	}
 		
-	if (displayformat[0] == 't') {
-		if (print_hint) {
-			rbuf = malloc(octetlength + sizeof("STRING: "));
-			if (rbuf == NULL)
-				return NULL;
-			memcpy(rbuf, "STRING: ", sizeof("STRING: ") - 1);
-			dst = rbuf + sizeof("STRING: ") - 1;
-		} else {
-			dst = rbuf = malloc(octetlength + 1);
-			if (rbuf == NULL)
-				return NULL;
-		}
+	if (displayformat[0] == 't' || displayformat[0] == 'a') {
+		if ((rbuf = malloc(prefixlen + octetlength + 1)) == NULL)
+			return NULL;
+		(void)strlcpy(rbuf, prefix, prefixlen + octetlength + 1);
+		dst = rbuf + prefixlen;
 		while (j < octetlength && i < srclen) {
 			clen = mbtowc(&wc, &(src[i]), srclen - i);
+			if (displayformat[0] == 'a' && clen > 1)
+				clen = -1;
 			switch (clen) {
 			case 0:
 				dst[j++] = '.';

@@ -1,4 +1,4 @@
-/*	$OpenBSD: ca.c,v 1.65 2020/07/27 14:22:53 tobhe Exp $	*/
+/*	$OpenBSD: ca.c,v 1.67 2020/08/16 09:09:16 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2010-2013 Reyk Floeter <reyk@openbsd.org>
@@ -447,7 +447,7 @@ ca_getcert(struct iked *env, struct imsg *imsg)
 	case IKEV2_CERT_X509_CERT:
 		ret = ca_validate_cert(env, &id, ptr, len);
 		if (ret == 0 && env->sc_ocsp_url) {
-			ret = ocsp_validate_cert(env, &id, ptr, len, sh, type);
+			ret = ocsp_validate_cert(env, ptr, len, sh, type);
 			if (ret == 0)
 				return (0);
 		}
@@ -1463,7 +1463,6 @@ ca_validate_cert(struct iked *env, struct iked_static_id *id,
 	X509		*cert = NULL;
 	EVP_PKEY	*pkey;
 	int		 ret = -1, result, error;
-	X509_NAME	*subject;
 	const char	*errstr = "failed";
 
 	if (len == 0) {
@@ -1478,7 +1477,7 @@ ca_validate_cert(struct iked *env, struct iked_static_id *id,
 	}
 
 	/* Certificate needs a valid subjectName */
-	if ((subject = X509_get_subject_name(cert)) == NULL) {
+	if (X509_get_subject_name(cert) == NULL) {
 		errstr = "invalid subject";
 		goto done;
 	}
