@@ -474,6 +474,11 @@ timeout_in_nsec(struct timeout *to, uint64_t nsecs)
 	return timeout_at_ts(to, &deadline);
 }
 
+int timeout_in_ticks(struct timeout *to, int to_ticks)
+{
+	return timeout_in_nsec(to, ((uint64_t) to_ticks) * tick_nsec);
+}
+
 int
 timeout_advance_nsec(struct timeout *to, uint64_t nsecs, uint64_t *omissed)
 {

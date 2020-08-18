@@ -321,7 +321,7 @@ main(void *framep)
 	strlcpy(pr->ps_comm, "swapper", sizeof(pr->ps_comm));
 
 	/* Init timeouts. */
-	timeout_set(&p->p_sleep_to, endtsleep, p);
+	timeout_set_kclock(&p->p_sleep_to, endtsleep, p, 0, KCLOCK_UPTIME);
 
 	/* Initialize signal state for process 0. */
 	signal_init();
