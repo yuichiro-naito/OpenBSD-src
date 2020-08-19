@@ -117,18 +117,18 @@ const char *tcptimers[TCPT_NTIMERS] =
  * Init, arm, disarm, and test TCP timers.
  */
 #define	TCP_TIMER_INIT(tp, timer)					\
-	timeout_set_proc(&(tp)->t_timer[(timer)], tcp_timer_funcs[(timer)], tp)
+	timeout_set_kclock(&(tp)->t_timer[(timer)], tcp_timer_funcs[(timer)], tp, TIMEOUT_PROC, KCLOCK_UPTIME)
 
 #define	TCP_TIMER_ARM(tp, timer, nticks)				\
 do {									\
 	SET((tp)->t_flags, TF_TIMER << (timer));			\
-	timeout_add_msec(&(tp)->t_timer[(timer)], (nticks) * 500);	\
+	timeout_add_msec_kclock(&(tp)->t_timer[(timer)], (nticks) * 500); \
 } while (0)
 
 #define	TCP_TIMER_ARM_MSEC(tp, timer, msecs)				\
 do {									\
 	SET((tp)->t_flags, TF_TIMER << (timer));			\
-	timeout_add_msec(&(tp)->t_timer[(timer)], (msecs));	\
+	timeout_add_msec_kclock(&(tp)->t_timer[(timer)], (msecs));	\
 } while (0)
 
 #define	TCP_TIMER_DISARM(tp, timer)					\

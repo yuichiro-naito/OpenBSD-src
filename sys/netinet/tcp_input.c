@@ -3123,8 +3123,8 @@ syn_cache_put(struct syn_cache *sc)
 		rtfree(sc->sc_route4.ro_rt);
 		sc->sc_route4.ro_rt = NULL;
 	}
-	timeout_set(&sc->sc_timer, syn_cache_reaper, sc);
-	timeout_add(&sc->sc_timer, 0);
+	timeout_set_kclock(&sc->sc_timer, syn_cache_reaper, sc, 0, KCLOCK_UPTIME);
+	timeout_add_kclock(&sc->sc_timer, 0);
 }
 
 struct pool syn_cache_pool;
@@ -3139,8 +3139,8 @@ do {									\
 	    TCPTV_SRTTDFLT * tcp_backoff[(sc)->sc_rxtshift], TCPTV_MIN,	\
 	    TCPTV_REXMTMAX);						\
 	if (!timeout_initialized(&(sc)->sc_timer))			\
-		timeout_set_proc(&(sc)->sc_timer, syn_cache_timer, (sc)); \
-	timeout_add(&(sc)->sc_timer, (sc)->sc_rxtcur * (hz / PR_SLOWHZ)); \
+		timeout_set_kclock(&(sc)->sc_timer, syn_cache_timer, (sc), TIMEOUT_PROC, KCLOCK_UPTIME); \
+	timeout_add_kclock(&(sc)->sc_timer, (sc)->sc_rxtcur * (hz / PR_SLOWHZ)); \
 } while (/*CONSTCOND*/0)
 
 #define	SYN_CACHE_TIMESTAMP(sc)	tcp_now + (sc)->sc_modulate
