@@ -144,9 +144,11 @@ int timeout_add_usec(struct timeout *, int);
 int timeout_add_nsec(struct timeout *, int);
 
 int timeout_advance_nsec(struct timeout *, uint64_t, uint64_t *);
-int timeout_in_nsec(struct timeout *, uint64_t);
-int timeout_in_ticks(struct timeout *, int);
+int timeout_add_kclock(struct timeout *, int);
 int timeout_add_tv_kclock(struct timeout *, const struct timeval *);
+int timeout_add_sec_kclock(struct timeout *, int);
+int timeout_add_msec_kclock(struct timeout *, int);
+int timeout_add_nsec_kclock(struct timeout *, uint64_t);
 
 int timeout_del(struct timeout *);
 int timeout_del_barrier(struct timeout *);

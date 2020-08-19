@@ -435,23 +435,6 @@ timeout_at_ts(struct timeout *to, const struct timespec *ts)
 }
 
 int
-timeout_in_nsec(struct timeout *to, uint64_t nsecs)
-{
-	struct timespec deadline, interval, now;
-
-	kclock_nanotime(to->to_kclock, &now);
-	NSEC_TO_TIMESPEC(nsecs, &interval);
-	timespecadd(&now, &interval, &deadline);
-
-	return timeout_at_ts(to, &deadline);
-}
-
-int timeout_in_ticks(struct timeout *to, int to_ticks)
-{
-	return timeout_in_nsec(to, ((uint64_t) to_ticks) * tick_nsec);
-}
-
-int
 timeout_advance_nsec(struct timeout *to, uint64_t nsecs, uint64_t *omissed)
 {
 	struct timespec intvl, next, now;
@@ -477,6 +460,35 @@ timeout_add_tv_kclock(struct timeout *to, const struct timeval *tv)
 	timespecadd(&now, &ts, &deadline);
 
 	return timeout_at_ts(to, &deadline);
+}
+
+int
+timeout_add_sec_kclock(struct timeout *to, int secs)
+{
+	return timeout_add_nsec_kclock(to, ((uint64_t) secs) * 1000000000);
+}
+
+int
+timeout_add_msec_kclock(struct timeout *to, int msecs)
+{
+	return timeout_add_nsec_kclock(to, ((uint64_t) msecs) * 1000000);
+}
+
+int
+timeout_add_nsec_kclock(struct timeout *to, uint64_t nsecs)
+{
+	struct timespec deadline, interval, now;
+
+	kclock_nanotime(to->to_kclock, &now);
+	NSEC_TO_TIMESPEC(nsecs, &interval);
+	timespecadd(&now, &interval, &deadline);
+
+	return timeout_at_ts(to, &deadline);
+}
+
+int timeout_add_kclock(struct timeout *to, int to_ticks)
+{
+	return timeout_add_nsec_kclock(to, ((uint64_t) to_ticks) * tick_nsec);
 }
 
 /*
