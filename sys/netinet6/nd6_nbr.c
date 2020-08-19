@@ -1053,8 +1053,9 @@ void
 nd6_dad_starttimer(struct dadq *dp, int msec)
 {
 
-	timeout_set_proc(&dp->dad_timer_ch, nd6_dad_timer, dp->dad_ifa);
-	timeout_add_msec(&dp->dad_timer_ch, msec);
+	timeout_set_kclock(&dp->dad_timer_ch, nd6_dad_timer, dp->dad_ifa,
+			   TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_add_msec_kclock(&dp->dad_timer_ch, msec);
 }
 
 void
