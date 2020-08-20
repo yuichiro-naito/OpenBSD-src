@@ -597,8 +597,10 @@ vio_attach(struct device *parent, struct device *self, void *aux)
 	ifmedia_add(&sc->sc_media, IFM_ETHER | IFM_AUTO, 0, NULL);
 	ifmedia_set(&sc->sc_media, IFM_ETHER | IFM_AUTO);
 	vsc->sc_config_change = vio_config_change;
-	timeout_set(&sc->sc_txtick, vio_txtick, &sc->sc_vq[VQTX]);
-	timeout_set(&sc->sc_rxtick, vio_rxtick, &sc->sc_vq[VQRX]);
+	timeout_set_kclock(&sc->sc_txtick, vio_txtick, &sc->sc_vq[VQTX],
+			   0, KCLOCK_UPTIME);
+	timeout_set_kclock(&sc->sc_rxtick, vio_rxtick, &sc->sc_vq[VQRX],
+			   0, KCLOCK_UPTIME);
 
 	if_attach(ifp);
 	ether_ifattach(ifp);
@@ -818,7 +820,7 @@ again:
 
 	if (queued > 0) {
 		virtio_notify(vsc, vq);
-		timeout_add_sec(&sc->sc_txtick, 1);
+		timeout_add_sec_kclock(&sc->sc_txtick, 1);
 	}
 }
 
@@ -982,7 +984,7 @@ vio_populate_rx_mbufs(struct vio_softc *sc)
 
 	if (done)
 		virtio_notify(vsc, vq);
-	timeout_add_sec(&sc->sc_rxtick, 1);
+	timeout_add_sec_kclock(&sc->sc_rxtick, 1);
 }
 
 /* dequeue received packets */
@@ -1158,7 +1160,7 @@ vio_txeof(struct virtqueue *vq)
 	if (vq->vq_used_idx == vq->vq_avail_idx)
 		timeout_del(&sc->sc_txtick);
 	else if (r)
-		timeout_add_sec(&sc->sc_txtick, 1);
+		timeout_add_sec_kclock(&sc->sc_txtick, 1);
 	return r;
 }
 
