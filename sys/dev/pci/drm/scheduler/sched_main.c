@@ -234,7 +234,13 @@ unsigned long drm_sched_suspend_timeout(struct drm_gpu_scheduler *sched)
 #ifdef __linux__
 	sched_timeout = sched->work_tdr.timer.expires;
 #else
-	sched_timeout = sched->work_tdr.to.to_time * hz;
+	struct timespec cur, diff;
+	nanotime(&cur);
+	if (timespeccmp(&sched->work_tdr.to.to_time, &cur, >)) {
+		timespecsub(&sched->work_tdr.to.to_time, &cur, &diff);
+		sched_timeout = (((unsigned long)(diff.tv_sec*1000000) + (diff.tv_nsec/1000)) / hz) + now;
+	} else
+		sched_timeout = now;
 #endif
 
 	/*

@@ -2221,9 +2221,10 @@ so_print(void *v,
 		    (unsigned long long)so->so_sp->ssp_max);
 		(*pr)("\tssp_idletv: %lld %ld\n", so->so_sp->ssp_idletv.tv_sec,
 		    so->so_sp->ssp_idletv.tv_usec);
-		(*pr)("\tssp_idleto: %spending (@%i)\n",
+		(*pr)("\tssp_idleto: %spending (@%lld.%09ld)\n",
 		    timeout_pending(&so->so_sp->ssp_idleto) ? "" : "not ",
-		    so->so_sp->ssp_idleto.to_time);
+		    so->so_sp->ssp_idleto.to_time.tv_sec,
+		    so->so_sp->ssp_idleto.to_time.tv_nsec);
 	}
 
 	(*pr)("so_rcv:\n");

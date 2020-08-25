@@ -521,7 +521,7 @@ tc_setclock(const struct timespec *ts)
 	if (adj_ticks > 0) {
 		if (adj_ticks > INT_MAX)
 			adj_ticks = INT_MAX;
-		timeout_adjust_ticks(adj_ticks);
+		ticks += adj_ticks;
 	}
 #endif
 }
