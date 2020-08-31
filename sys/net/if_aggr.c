@@ -1146,11 +1146,11 @@ aggr_add_port(struct aggr_softc *sc, const struct trunk_reqport *rp)
 	task_set(&p->p_rxm_task, aggr_rx, p);
 	mq_init(&p->p_rxm_mq, 3, IPL_NET);
 
-	timeout_set_proc(&p->p_ptm_tx, aggr_ptm_tx, p);
-	timeout_set_proc(&p->p_txm_ntt, aggr_transmit_machine, p);
-	timeout_set_proc(&p->p_current_while_timer,
-	    aggr_current_while_timer, p);
-	timeout_set_proc(&p->p_wait_while_timer, aggr_wait_while_timer, p);
+	timeout_set_kclock(&p->p_ptm_tx, aggr_ptm_tx, p, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&p->p_txm_ntt, aggr_transmit_machine, p, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&p->p_current_while_timer,
+		    aggr_current_while_timer, p, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&p->p_wait_while_timer, aggr_wait_while_timer, p, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	p->p_muxed = 0;
 	p->p_collecting = 0;
@@ -1480,7 +1480,7 @@ aggr_p_linkch(void *arg)
 		aggr_rxm(sc, p, LACP_RXM_E_PORT_ENABLED);
 
 		if (aggr_lacp_enabled(sc)) {
-			timeout_add_sec(&p->p_ptm_tx,
+			timeout_add_sec_kclock(&p->p_ptm_tx,
 			    aggr_periodic_times[AGGR_LACP_TIMEOUT_FAST]);
 		}
 	} else {
@@ -1547,7 +1547,7 @@ aggr_wait_while_timer(void *arg)
 static void
 aggr_start_current_while_timer(struct aggr_port *p, unsigned int t)
 {
-	timeout_add_sec(&p->p_current_while_timer,
+	timeout_add_sec_kclock(&p->p_current_while_timer,
 		aggr_periodic_times[t] * LACP_TIMEOUT_FACTOR);
 }
 
@@ -2158,7 +2158,7 @@ aggr_mux_ev(struct aggr_softc *sc, struct aggr_port *p, enum lacp_mux_event ev,
 		/*
 		 * Start wait_while_timer
 		 */
-		timeout_add_sec(&p->p_wait_while_timer,
+		timeout_add_sec_kclock(&p->p_wait_while_timer,
 		    LACP_AGGREGATION_WAIT_TIME);
 		break;
 	case LACP_MUX_S_ATTACHED:
@@ -2430,7 +2430,7 @@ aggr_up(struct aggr_softc *sc)
 			if (!aggr_port_enabled(p))
 				continue;
 
-			timeout_add_sec(&p->p_ptm_tx,
+			timeout_add_sec_kclock(&p->p_ptm_tx,
 			    aggr_periodic_times[sc->sc_lacp_timeout]);
 		}
 	}
@@ -2635,7 +2635,7 @@ aggr_ptm_tx(void *arg)
 
 	timeout = ISSET(p->p_partner_state, LACP_STATE_TIMEOUT) ?
 	    AGGR_LACP_TIMEOUT_FAST : AGGR_LACP_TIMEOUT_SLOW;
-	timeout_add_sec(&p->p_ptm_tx, aggr_periodic_times[timeout]);
+	timeout_add_sec_kclock(&p->p_ptm_tx, aggr_periodic_times[timeout]);
 }
 
 static inline void
@@ -2732,7 +2732,7 @@ static void
 aggr_ntt(struct aggr_port *p)
 {
 	if (!timeout_pending(&p->p_txm_ntt))
-		timeout_add(&p->p_txm_ntt, 0);
+		timeout_add_kclock(&p->p_txm_ntt, 0);
 }
 
 static void
@@ -2753,7 +2753,7 @@ aggr_transmit_machine(void *arg)
 
 	diff = ticks - *log;
 	if (diff < period) {
-		timeout_add(&p->p_txm_ntt, period - diff);
+		timeout_add_kclock(&p->p_txm_ntt, period - diff);
 		return;
 	}
 
@@ -2794,7 +2794,7 @@ aggr_set_partner_timeout(struct aggr_port *p, int timeout)
 
 	if (timeout == AGGR_LACP_TIMEOUT_FAST) {
 		SET(p->p_partner_state, LACP_STATE_TIMEOUT);
-		timeout_add_sec(&p->p_ptm_tx,
+		timeout_add_sec_kclock(&p->p_ptm_tx,
 		    aggr_periodic_times[AGGR_LACP_TIMEOUT_FAST]);
 	} else
 		CLR(p->p_partner_state, LACP_STATE_TIMEOUT);

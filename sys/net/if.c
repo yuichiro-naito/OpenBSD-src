@@ -1601,7 +1601,7 @@ if_slowtimo(void *arg)
 	if (ifp->if_watchdog) {
 		if (ifp->if_timer > 0 && --ifp->if_timer == 0)
 			task_add(net_tq(ifp->if_index), &ifp->if_watchdogtask);
-		timeout_add_sec(&ifp->if_slowtimo, IFNET_SLOWTIMO);
+		timeout_add_sec_kclock(&ifp->if_slowtimo, IFNET_SLOWTIMO);
 	}
 	splx(s);
 }

@@ -1047,7 +1047,7 @@ swofp_create(struct switch_softc *sc)
 	arc4random_buf(&swofs->swofs_datapath_id,
 	    sizeof(swofs->swofs_datapath_id));
 
-	timeout_set(&swofs->swofs_flow_timeout, swofp_timer, sc);
+	timeout_set_kclock(&swofs->swofs_flow_timeout, swofp_timer, sc, 0, KCLOCK_UPTIME);
 	timeout_add_sec(&swofs->swofs_flow_timeout, 10);
 
 	/* TODO: Configured from ifconfig  */

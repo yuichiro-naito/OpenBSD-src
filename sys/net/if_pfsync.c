@@ -345,9 +345,9 @@ pfsync_clone_create(struct if_clone *ifc, int unit)
 	ifp->if_hdrlen = sizeof(struct pfsync_header);
 	ifp->if_mtu = ETHERMTU;
 	ifp->if_xflags = IFXF_CLONED | IFXF_MPSAFE;
-	timeout_set_proc(&sc->sc_tmo, pfsync_timeout, NULL);
-	timeout_set_proc(&sc->sc_bulk_tmo, pfsync_bulk_update, NULL);
-	timeout_set_proc(&sc->sc_bulkfail_tmo, pfsync_bulk_fail, NULL);
+	timeout_set_kclock(&sc->sc_tmo, pfsync_timeout, NULL, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&sc->sc_bulk_tmo, pfsync_bulk_update, NULL, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&sc->sc_bulkfail_tmo, pfsync_bulk_fail, NULL, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	if_attach(ifp);
 	if_alloc_sadl(ifp);
@@ -1828,7 +1828,7 @@ pfsync_defer(struct pf_state *st, struct mbuf *m)
 	sc->sc_deferred++;
 	TAILQ_INSERT_TAIL(&sc->sc_deferrals, pd, pd_entry);
 
-	timeout_set_proc(&pd->pd_tmo, pfsync_defer_tmo, pd);
+	timeout_set_kclock(&pd->pd_tmo, pfsync_defer_tmo, pd, TIMEOUT_PROC, KCLOCK_UPTIME);
 	timeout_add_msec(&pd->pd_tmo, 20);
 
 	schednetisr(NETISR_PFSYNC);

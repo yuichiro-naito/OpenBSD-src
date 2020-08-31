@@ -302,7 +302,7 @@ route_attach(struct socket *so, int proto)
 	rop = pool_get(&rtpcb_pool, PR_WAITOK|PR_ZERO);
 	so->so_pcb = rop;
 	/* Init the timeout structure */
-	timeout_set(&rop->rop_timeout, rtm_senddesync_timer, so);
+	timeout_set_kclock(&rop->rop_timeout, rtm_senddesync_timer, so, 0, KCLOCK_UPTIME);
 	refcnt_init(&rop->rop_refcnt);
 
 	if (curproc == NULL)

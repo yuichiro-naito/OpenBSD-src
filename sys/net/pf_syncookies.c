@@ -130,8 +130,8 @@ uint32_t	pf_syncookie_generate(struct pf_pdesc *, uint16_t);
 void
 pf_syncookies_init(void)
 {
-	timeout_set(&pf_syncookie_status.keytimeout,
-	    pf_syncookie_rotate, NULL);
+	timeout_set_kclock(&pf_syncookie_status.keytimeout,
+			   pf_syncookie_rotate, NULL, 0, KCLOCK_UPTIME);
 	pf_syncookie_status.hiwat = PFSTATE_HIWAT * PF_SYNCOOKIES_HIWATPCT/100;
 	pf_syncookie_status.lowat = PFSTATE_HIWAT * PF_SYNCOOKIES_LOWATPCT/100;
 	pf_syncookies_setmode(PF_SYNCOOKIES_NEVER);

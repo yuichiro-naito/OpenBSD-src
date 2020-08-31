@@ -746,8 +746,8 @@ lacp_attach(struct trunk_softc *sc)
 	lsc->lsc_port_prio = LACP_DEFAULT_PORT_PRIO;
 	lsc->lsc_ifq_prio = LACP_DEFAULT_IFQ_PRIO;
 
-	timeout_set(&lsc->lsc_transit_callout, lacp_transit_expire, lsc);
-	timeout_set(&lsc->lsc_callout, lacp_tick, lsc);
+	timeout_set_kclock(&lsc->lsc_transit_callout, lacp_transit_expire, lsc, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&lsc->lsc_callout, lacp_tick, lsc, 0, KCLOCK_UPTIME);
 	task_set(&lsc->lsc_input, lacp_input_process, lsc);
 
 	/* if the trunk is already up then do the same */

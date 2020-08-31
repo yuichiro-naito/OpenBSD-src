@@ -219,7 +219,7 @@ pppoe_clone_create(struct if_clone *ifc, int unit)
 	memcpy(&sc->sc_dest, etherbroadcastaddr, sizeof(sc->sc_dest));
 
 	/* init timer for interface watchdog */
-	timeout_set_proc(&sc->sc_timeout, pppoe_timeout, sc);
+	timeout_set_kclock(&sc->sc_timeout, pppoe_timeout, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	if_attach(&sc->sc_sppp.pp_if);
 	if_alloc_sadl(&sc->sc_sppp.pp_if);

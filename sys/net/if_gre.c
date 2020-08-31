@@ -601,7 +601,7 @@ gre_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_tunnel.t_df = htons(0);
 	sc->sc_tunnel.t_ecn = ECN_ALLOWED;
 
-	timeout_set(&sc->sc_ka_send, gre_keepalive_send, sc);
+	timeout_set_kclock(&sc->sc_ka_send, gre_keepalive_send, sc, 0, KCLOCK_UPTIME);
 	timeout_set_proc(&sc->sc_ka_hold, gre_keepalive_hold, sc);
 	sc->sc_ka_state = GRE_KA_NONE;
 
@@ -861,7 +861,7 @@ eoip_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_ka_timeo = 10;
 	sc->sc_ka_count = 10;
 
-	timeout_set(&sc->sc_ka_send, eoip_keepalive_send, sc);
+	timeout_set_kclock(&sc->sc_ka_send, eoip_keepalive_send, sc, 0, KCLOCK_UPTIME);
 	timeout_set_proc(&sc->sc_ka_hold, eoip_keepalive_hold, sc);
 	sc->sc_ka_state = GRE_KA_DOWN;
 
@@ -1693,7 +1693,7 @@ gre_keepalive_recv(struct ifnet *ifp, struct mbuf *m)
 		break;
 	}
 
-	timeout_add_sec(&sc->sc_ka_hold, sc->sc_ka_timeo * sc->sc_ka_count);
+	timeout_add_sec_kclock(&sc->sc_ka_hold, sc->sc_ka_timeo * sc->sc_ka_count);
 
 drop:
 	m_freem(m);
@@ -2391,8 +2391,8 @@ gre_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			sc->sc_ka_holdmax = sc->sc_ka_count;
 
 			sc->sc_ka_recvtm = ticks - hz;
-			timeout_add(&sc->sc_ka_send, 1);
-			timeout_add_sec(&sc->sc_ka_hold,
+			timeout_add_kclock(&sc->sc_ka_send, 1);
+			timeout_add_sec_kclock(&sc->sc_ka_hold,
 			    sc->sc_ka_timeo * sc->sc_ka_count);
 		}
 		break;
@@ -3176,7 +3176,7 @@ gre_keepalive_send(void *arg)
 	 * or temporary errors.
 	 */
 	if (sc->sc_ka_timeo)
-		timeout_add_sec(&sc->sc_ka_send, sc->sc_ka_timeo);
+		timeout_add_sec_kclock(&sc->sc_ka_send, sc->sc_ka_timeo);
 
 	if (!ISSET(sc->sc_if.if_flags, IFF_RUNNING) ||
 	    sc->sc_ka_state == GRE_KA_NONE ||
@@ -3668,7 +3668,7 @@ nvgre_up(struct nvgre_softc *sc)
 	sc->sc_inm = inm;
 	SET(sc->sc_ac.ac_if.if_flags, IFF_RUNNING);
 
-	timeout_add_sec(&sc->sc_ether_age, NVGRE_AGE_TMO);
+	timeout_add_sec_kclock(&sc->sc_ether_age, NVGRE_AGE_TMO);
 
 	return (0);
 
@@ -3794,7 +3794,7 @@ nvgre_age(void *arg)
 	}
 	rw_exit_write(&sc->sc_ether_lock);
 
-	timeout_add_sec(&sc->sc_ether_age, NVGRE_AGE_TMO);
+	timeout_add_sec_kclock(&sc->sc_ether_age, NVGRE_AGE_TMO);
 }
 
 static inline int
@@ -4117,7 +4117,7 @@ eoip_keepalive_send(void *arg)
 
 	gre_ip_output(&sc->sc_tunnel, m);
 
-	timeout_add_sec(&sc->sc_ka_send, sc->sc_ka_timeo);
+	timeout_add_sec_kclock(&sc->sc_ka_send, sc->sc_ka_timeo);
 }
 
 static void
@@ -4161,7 +4161,7 @@ eoip_keepalive_recv(struct eoip_softc *sc)
 		break;
 	}
 
-	timeout_add_sec(&sc->sc_ka_hold, sc->sc_ka_timeo * sc->sc_ka_count);
+	timeout_add_sec_kclock(&sc->sc_ka_hold, sc->sc_ka_timeo * sc->sc_ka_count);
 }
 
 static struct mbuf *

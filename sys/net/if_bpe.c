@@ -181,7 +181,7 @@ bpe_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_bridge_num = 0;
 	sc->sc_bridge_max = 100; /* XXX */
 	sc->sc_bridge_tmo = 240;
-	timeout_set_proc(&sc->sc_bridge_age, bpe_bridge_age, sc);
+	timeout_set_kclock(&sc->sc_bridge_age, bpe_bridge_age, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	ifp->if_softc = sc;
 	ifp->if_hardmtu = ETHER_MAX_HARDMTU_LEN;
@@ -334,7 +334,7 @@ bpe_bridge_age(void *arg)
 	struct bpe_entry *be, *nbe;
 	time_t diff;
 
-	timeout_add_sec(&sc->sc_bridge_age, BPE_BRIDGE_AGE_TMO);
+	timeout_add_sec_kclock(&sc->sc_bridge_age, BPE_BRIDGE_AGE_TMO);
 
 	rw_enter_write(&sc->sc_bridge_lock);
 	RBT_FOREACH_SAFE(be, bpe_map, &sc->sc_bridge_map, nbe) {
@@ -644,7 +644,7 @@ bpe_up(struct bpe_softc *sc)
 
 	if_put(ifp0);
 
-	timeout_add_sec(&sc->sc_bridge_age, BPE_BRIDGE_AGE_TMO);
+	timeout_add_sec_kclock(&sc->sc_bridge_age, BPE_BRIDGE_AGE_TMO);
 
 	return (0);
 

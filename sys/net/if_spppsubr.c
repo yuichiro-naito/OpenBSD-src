@@ -691,7 +691,7 @@ sppp_attach(struct ifnet *ifp)
 
 	/* Initialize keepalive handler. */
 	if (! spppq) {
-		timeout_set_proc(&keepalive_ch, sppp_keepalive, NULL);
+		timeout_set_kclock(&keepalive_ch, sppp_keepalive, NULL, TIMEOUT_PROC, KCLOCK_UPTIME);
 		timeout_add_sec(&keepalive_ch, 10);
 	}
 
@@ -714,8 +714,8 @@ sppp_attach(struct ifnet *ifp)
 	sp->pp_down = lcp.Down;
 
 	for (i = 0; i < IDX_COUNT; i++)
-		timeout_set(&sp->ch[i], (cps[i])->TO, (void *)sp);
-	timeout_set(&sp->pap_my_to_ch, sppp_pap_my_TO, (void *)sp);
+		timeout_set_kclock(&sp->ch[i], (cps[i])->TO, (void *)sp, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&sp->pap_my_to_ch, sppp_pap_my_TO, (void *)sp, 0, KCLOCK_UPTIME);
 
 	sppp_lcp_init(sp);
 	sppp_ipcp_init(sp);

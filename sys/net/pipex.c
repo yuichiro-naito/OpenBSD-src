@@ -726,7 +726,7 @@ pipex_lookup_by_session_id(int protocol, int session_id)
 Static void
 pipex_timer_start(void)
 {
-	timeout_set_proc(&pipex_timer_ch, pipex_timer, NULL);
+	timeout_set_kclock(&pipex_timer_ch, pipex_timer, NULL, TIMEOUT_PROC, KCLOCK_UPTIME);
 	timeout_add_sec(&pipex_timer_ch, pipex_prune);
 }
 

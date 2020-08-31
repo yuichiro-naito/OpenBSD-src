@@ -554,18 +554,18 @@ pflow_init_timeouts(struct pflow_softc *sc)
 		if (timeout_initialized(&sc->sc_tmo_tmpl))
 			timeout_del(&sc->sc_tmo_tmpl);
 		if (!timeout_initialized(&sc->sc_tmo))
-			timeout_set_proc(&sc->sc_tmo, pflow_timeout, sc);
+			timeout_set_kclock(&sc->sc_tmo, pflow_timeout, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 		break;
 	case PFLOW_PROTO_10:
 		if (!timeout_initialized(&sc->sc_tmo_tmpl))
-			timeout_set_proc(&sc->sc_tmo_tmpl, pflow_timeout_tmpl,
-			    sc);
+			timeout_set_kclock(&sc->sc_tmo_tmpl, pflow_timeout_tmpl,
+					   sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 		if (!timeout_initialized(&sc->sc_tmo))
-			timeout_set_proc(&sc->sc_tmo, pflow_timeout, sc);
+			timeout_set_kclock(&sc->sc_tmo, pflow_timeout, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 		if (!timeout_initialized(&sc->sc_tmo6))
-			timeout_set_proc(&sc->sc_tmo6, pflow_timeout6, sc);
+			timeout_set_kclock(&sc->sc_tmo6, pflow_timeout6, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 
-		timeout_add_sec(&sc->sc_tmo_tmpl, PFLOW_TMPL_TIMEOUT);
+		timeout_add_sec_kclock(&sc->sc_tmo_tmpl, PFLOW_TMPL_TIMEOUT);
 		break;
 	default: /* NOTREACHED */
 		break;
@@ -657,7 +657,7 @@ pflow_get_mbuf(struct pflow_softc *sc, u_int16_t set_id)
 		m_copyback(m, 0, PFLOW_HDRLEN, &h, M_NOWAIT);
 
 		sc->sc_count = 0;
-		timeout_add_sec(&sc->sc_tmo, PFLOW_TIMEOUT);
+		timeout_add_sec_kclock(&sc->sc_tmo, PFLOW_TIMEOUT);
 		break;
 	case PFLOW_PROTO_10:
 		/* populate pflow_set_header */
@@ -897,7 +897,7 @@ copy_flow_ipfix_4_to_m(struct pflow_ipfix_flow4 *flow, struct pflow_softc *sc)
 			return (ENOBUFS);
 		}
 		sc->sc_count4 = 0;
-		timeout_add_sec(&sc->sc_tmo, PFLOW_TIMEOUT);
+		timeout_add_sec_kclock(&sc->sc_tmo, PFLOW_TIMEOUT);
 	}
 	m_copyback(sc->sc_mbuf, PFLOW_SET_HDRLEN +
 	    (sc->sc_count4 * sizeof(struct pflow_ipfix_flow4)),
@@ -924,7 +924,7 @@ copy_flow_ipfix_6_to_m(struct pflow_ipfix_flow6 *flow, struct pflow_softc *sc)
 			return (ENOBUFS);
 		}
 		sc->sc_count6 = 0;
-		timeout_add_sec(&sc->sc_tmo6, PFLOW_TIMEOUT);
+		timeout_add_sec_kclock(&sc->sc_tmo6, PFLOW_TIMEOUT);
 	}
 	m_copyback(sc->sc_mbuf6, PFLOW_SET_HDRLEN +
 	    (sc->sc_count6 * sizeof(struct pflow_ipfix_flow6)),
@@ -1190,7 +1190,7 @@ pflow_sendout_ipfix_tmpl(struct pflow_softc *sc)
 	h10->flow_sequence = htonl(sc->sc_sequence);
 	h10->observation_dom = htonl(PFLOW_ENGINE_TYPE);
 
-	timeout_add_sec(&sc->sc_tmo_tmpl, PFLOW_TMPL_TIMEOUT);
+	timeout_add_sec_kclock(&sc->sc_tmo_tmpl, PFLOW_TMPL_TIMEOUT);
 	if (mq_enqueue(&sc->sc_outputqueue, m) == 0)
 		task_add(net_tq(ifp->if_index), &sc->sc_outputtask);
 	return (0);

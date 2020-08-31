@@ -7581,7 +7581,7 @@ pf_delay_pkt(struct mbuf *m, u_int ifidx)
 	}
 	pdy->ifidx = ifidx;
 	pdy->m = m;
-	timeout_set(&pdy->to, pf_pktenqueue_delayed, pdy);
+	timeout_set_kclock(&pdy->to, pf_pktenqueue_delayed, pdy, 0, KCLOCK_UPTIME);
 	timeout_add_msec(&pdy->to, m->m_pkthdr.pf.delay);
 	m->m_pkthdr.pf.delay = 0;
 	return (0);

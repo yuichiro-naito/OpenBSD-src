@@ -1921,7 +1921,7 @@ bstp_initialization(struct bstp_state *bs)
 	bs->bs_bridge_pv.pv_port_id = 0;
 
 	if (!timeout_initialized(&bs->bs_bstptimeout))
-		timeout_set(&bs->bs_bstptimeout, bstp_tick, bs);
+		timeout_set_kclock(&bs->bs_bstptimeout, bstp_tick, bs, 0, KCLOCK_UPTIME);
 	if (!timeout_pending(&bs->bs_bstptimeout))
 		timeout_add_sec(&bs->bs_bstptimeout, 1);
 
