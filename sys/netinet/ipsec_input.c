@@ -318,10 +318,10 @@ ipsec_common_input(struct mbuf *m, int skip, int protoff, int af, int sproto,
 	if (tdbp->tdb_first_use == 0) {
 		tdbp->tdb_first_use = gettime();
 		if (tdbp->tdb_flags & TDBF_FIRSTUSE)
-			timeout_add_sec(&tdbp->tdb_first_tmo,
+			timeout_add_sec_kclock(&tdbp->tdb_first_tmo,
 			    tdbp->tdb_exp_first_use);
 		if (tdbp->tdb_flags & TDBF_SOFT_FIRSTUSE)
-			timeout_add_sec(&tdbp->tdb_sfirst_tmo,
+			timeout_add_sec_kclock(&tdbp->tdb_sfirst_tmo,
 			    tdbp->tdb_soft_first_use);
 	}
 
