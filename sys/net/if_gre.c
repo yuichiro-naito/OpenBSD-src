@@ -602,7 +602,7 @@ gre_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_tunnel.t_ecn = ECN_ALLOWED;
 
 	timeout_set_kclock(&sc->sc_ka_send, gre_keepalive_send, sc, 0, KCLOCK_UPTIME);
-	timeout_set_proc(&sc->sc_ka_hold, gre_keepalive_hold, sc);
+	timeout_set_kclock(&sc->sc_ka_hold, gre_keepalive_hold, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 	sc->sc_ka_state = GRE_KA_NONE;
 
 	if_counters_alloc(ifp);
@@ -800,7 +800,7 @@ nvgre_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_ether_num = 0;
 	sc->sc_ether_max = 100;
 	sc->sc_ether_tmo = 240 * hz;
-	timeout_set_proc(&sc->sc_ether_age, nvgre_age, sc); /* ugh */
+	timeout_set_kclock(&sc->sc_ether_age, nvgre_age, sc, TIMEOUT_PROC, KCLOCK_UPTIME); /* ugh */
 
 	ifmedia_init(&sc->sc_media, 0, egre_media_change, egre_media_status);
 	ifmedia_add(&sc->sc_media, IFM_ETHER | IFM_AUTO, 0, NULL);
@@ -862,7 +862,7 @@ eoip_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_ka_count = 10;
 
 	timeout_set_kclock(&sc->sc_ka_send, eoip_keepalive_send, sc, 0, KCLOCK_UPTIME);
-	timeout_set_proc(&sc->sc_ka_hold, eoip_keepalive_hold, sc);
+	timeout_set_kclock(&sc->sc_ka_hold, eoip_keepalive_hold, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 	sc->sc_ka_state = GRE_KA_DOWN;
 
 	ifmedia_init(&sc->sc_media, 0, egre_media_change, egre_media_status);

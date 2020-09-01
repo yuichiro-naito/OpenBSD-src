@@ -432,7 +432,7 @@ if_attachsetup(struct ifnet *ifp)
 	pfi_attach_ifnet(ifp);
 #endif
 
-	timeout_set(&ifp->if_slowtimo, if_slowtimo, ifp);
+	timeout_set_kclock(&ifp->if_slowtimo, if_slowtimo, ifp, 0, KCLOCK_UPTIME);
 	if_slowtimo(ifp);
 
 	if_idxmap_insert(ifp);

@@ -487,7 +487,7 @@ lacp_tick(void *arg)
 		lacp_sm_tx(lp);
 		lacp_sm_ptx_tx_schedule(lp);
 	}
-	timeout_add_sec(&lsc->lsc_callout, 1);
+	timeout_add_sec_kclock(&lsc->lsc_callout, 1);
 }
 
 int
@@ -778,7 +778,7 @@ lacp_init(struct trunk_softc *sc)
 {
 	struct lacp_softc *lsc = LACP_SOFTC(sc);
 
-	timeout_add_sec(&lsc->lsc_callout, 1);
+	timeout_add_sec_kclock(&lsc->lsc_callout, 1);
 }
 
 void
@@ -840,7 +840,7 @@ lacp_suppress_distributing(struct lacp_softc *lsc, struct lacp_aggregator *la)
 	}
 
 	/* set a timeout for the marker frames */
-	timeout_add_msec(&lsc->lsc_transit_callout, LACP_TRANSIT_DELAY);
+	timeout_add_msec_kclock(&lsc->lsc_transit_callout, LACP_TRANSIT_DELAY);
 }
 
 int

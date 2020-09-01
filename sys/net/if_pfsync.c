@@ -1172,7 +1172,7 @@ pfsync_in_bus(caddr_t buf, int len, int count, int flags)
 
 	switch (bus->status) {
 	case PFSYNC_BUS_START:
-		timeout_add(&sc->sc_bulkfail_tmo, 4 * hz +
+		timeout_add_kclock(&sc->sc_bulkfail_tmo, 4 * hz +
 		    pf_pool_limits[PF_LIMIT_STATES].limit /
 		    ((sc->sc_if.if_mtu - PFSYNC_MINPKT) /
 		    sizeof(struct pfsync_state)));
@@ -1789,7 +1789,7 @@ pfsync_insert_state(struct pf_state *st)
 #endif
 
 	if (sc->sc_len == PFSYNC_MINPKT)
-		timeout_add_sec(&sc->sc_tmo, 1);
+		timeout_add_sec_kclock(&sc->sc_tmo, 1);
 
 	pfsync_q_ins(st, PFSYNC_S_INS);
 
@@ -1829,7 +1829,7 @@ pfsync_defer(struct pf_state *st, struct mbuf *m)
 	TAILQ_INSERT_TAIL(&sc->sc_deferrals, pd, pd_entry);
 
 	timeout_set_kclock(&pd->pd_tmo, pfsync_defer_tmo, pd, TIMEOUT_PROC, KCLOCK_UPTIME);
-	timeout_add_msec(&pd->pd_tmo, 20);
+	timeout_add_msec_kclock(&pd->pd_tmo, 20);
 
 	schednetisr(NETISR_PFSYNC);
 
@@ -1947,7 +1947,7 @@ pfsync_update_state_locked(struct pf_state *st)
 	}
 
 	if (sc->sc_len == PFSYNC_MINPKT)
-		timeout_add_sec(&sc->sc_tmo, 1);
+		timeout_add_sec_kclock(&sc->sc_tmo, 1);
 
 	switch (st->sync_state) {
 	case PFSYNC_S_UPD_C:
@@ -2033,7 +2033,7 @@ pfsync_request_full_update(struct pfsync_softc *sc)
 #endif
 		pfsync_sync_ok = 0;
 		DPFPRINTF(LOG_INFO, "requesting bulk update");
-		timeout_add(&sc->sc_bulkfail_tmo, 4 * hz +
+		timeout_add_kclock(&sc->sc_bulkfail_tmo, 4 * hz +
 		    pf_pool_limits[PF_LIMIT_STATES].limit /
 		    ((sc->sc_if.if_mtu - PFSYNC_MINPKT) /
 		    sizeof(struct pfsync_state)));
@@ -2132,7 +2132,7 @@ pfsync_delete_state(struct pf_state *st)
 	}
 
 	if (sc->sc_len == PFSYNC_MINPKT)
-		timeout_add_sec(&sc->sc_tmo, 1);
+		timeout_add_sec_kclock(&sc->sc_tmo, 1);
 
 	switch (st->sync_state) {
 	case PFSYNC_S_INS:
@@ -2340,7 +2340,7 @@ pfsync_bulk_start(void)
 		sc->sc_bulk_last = sc->sc_bulk_next;
 
 		pfsync_bulk_status(PFSYNC_BUS_START);
-		timeout_add(&sc->sc_bulk_tmo, 0);
+		timeout_add_kclock(&sc->sc_bulk_tmo, 0);
 	}
 }
 
@@ -2381,7 +2381,7 @@ pfsync_bulk_update(void *arg)
 		    sizeof(struct pfsync_state)) {
 			/* we've filled a packet */
 			sc->sc_bulk_next = st;
-			timeout_add(&sc->sc_bulk_tmo, 1);
+			timeout_add_kclock(&sc->sc_bulk_tmo, 1);
 			break;
 		}
 	}
@@ -2423,7 +2423,7 @@ pfsync_bulk_fail(void *arg)
 		goto out;
 	if (sc->sc_bulk_tries++ < PFSYNC_MAX_BULKTRIES) {
 		/* Try again */
-		timeout_add_sec(&sc->sc_bulkfail_tmo, 5);
+		timeout_add_sec_kclock(&sc->sc_bulkfail_tmo, 5);
 		pfsync_request_update(0, 0);
 	} else {
 		/* Pretend like the transfer was ok */

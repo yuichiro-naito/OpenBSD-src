@@ -918,13 +918,13 @@ wg_timers_init(struct wg_timers *t)
 	rw_init(&t->t_lock, "wg_timers");
 	mtx_init(&t->t_handshake_mtx, IPL_NET);
 
-	timeout_set(&t->t_new_handshake, wg_timers_run_new_handshake, t);
-	timeout_set(&t->t_send_keepalive, wg_timers_run_send_keepalive, t);
-	timeout_set(&t->t_retry_handshake, wg_timers_run_retry_handshake, t);
-	timeout_set(&t->t_persistent_keepalive,
-	    wg_timers_run_persistent_keepalive, t);
-	timeout_set(&t->t_zero_key_material,
-	    wg_timers_run_zero_key_material, t);
+	timeout_set_kclock(&t->t_new_handshake, wg_timers_run_new_handshake, t, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&t->t_send_keepalive, wg_timers_run_send_keepalive, t, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&t->t_retry_handshake, wg_timers_run_retry_handshake, t, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&t->t_persistent_keepalive,
+	    wg_timers_run_persistent_keepalive, t, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&t->t_zero_key_material,
+	    wg_timers_run_zero_key_material, t, 0, KCLOCK_UPTIME);
 }
 
 void
@@ -1007,7 +1007,7 @@ wg_timers_event_data_sent(struct wg_timers *t)
 
 	rw_enter_read(&t->t_lock);
 	if (!t->t_disabled && !timeout_pending(&t->t_new_handshake))
-		timeout_add_msec(&t->t_new_handshake, msecs);
+		timeout_add_msec_kclock(&t->t_new_handshake, msecs);
 	rw_exit_read(&t->t_lock);
 }
 
@@ -1017,7 +1017,7 @@ wg_timers_event_data_received(struct wg_timers *t)
 	rw_enter_read(&t->t_lock);
 	if (!t->t_disabled) {
 		if (!timeout_pending(&t->t_send_keepalive))
-			timeout_add_sec(&t->t_send_keepalive,
+			timeout_add_sec_kclock(&t->t_send_keepalive,
 			    KEEPALIVE_TIMEOUT);
 		else
 			t->t_need_another_keepalive = 1;
@@ -1042,7 +1042,7 @@ wg_timers_event_any_authenticated_packet_traversal(struct wg_timers *t)
 {
 	rw_enter_read(&t->t_lock);
 	if (!t->t_disabled && t->t_persistent_keepalive_interval > 0)
-		timeout_add_sec(&t->t_persistent_keepalive,
+		timeout_add_sec_kclock(&t->t_persistent_keepalive,
 		    t->t_persistent_keepalive_interval);
 	rw_exit_read(&t->t_lock);
 }
@@ -1055,7 +1055,7 @@ wg_timers_event_handshake_initiated(struct wg_timers *t)
 
 	rw_enter_read(&t->t_lock);
 	if (!t->t_disabled)
-		timeout_add_msec(&t->t_retry_handshake, msecs);
+		timeout_add_msec_kclock(&t->t_retry_handshake, msecs);
 	rw_exit_read(&t->t_lock);
 }
 
@@ -1087,7 +1087,7 @@ wg_timers_event_session_derived(struct wg_timers *t)
 {
 	rw_enter_read(&t->t_lock);
 	if (!t->t_disabled)
-		timeout_add_sec(&t->t_zero_key_material, REJECT_AFTER_TIME * 3);
+		timeout_add_sec_kclock(&t->t_zero_key_material, REJECT_AFTER_TIME * 3);
 	rw_exit_read(&t->t_lock);
 }
 
@@ -1145,7 +1145,7 @@ wg_timers_run_retry_handshake(void *_t)
 		timeout_del(&t->t_send_keepalive);
 		mq_purge(&peer->p_stage_queue);
 		if (!timeout_pending(&t->t_zero_key_material))
-			timeout_add_sec(&t->t_zero_key_material,
+			timeout_add_sec_kclock(&t->t_zero_key_material,
 			    REJECT_AFTER_TIME * 3);
 	}
 }
@@ -1159,7 +1159,7 @@ wg_timers_run_send_keepalive(void *_t)
 	task_add(wg_crypt_taskq, &peer->p_send_keepalive);
 	if (t->t_need_another_keepalive) {
 		t->t_need_another_keepalive = 0;
-		timeout_add_sec(&t->t_send_keepalive, KEEPALIVE_TIMEOUT);
+		timeout_add_sec_kclock(&t->t_send_keepalive, KEEPALIVE_TIMEOUT);
 	}
 }
 

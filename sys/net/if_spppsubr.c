@@ -692,7 +692,7 @@ sppp_attach(struct ifnet *ifp)
 	/* Initialize keepalive handler. */
 	if (! spppq) {
 		timeout_set_kclock(&keepalive_ch, sppp_keepalive, NULL, TIMEOUT_PROC, KCLOCK_UPTIME);
-		timeout_add_sec(&keepalive_ch, 10);
+		timeout_add_sec_kclock(&keepalive_ch, 10);
 	}
 
 	/* Insert new entry into the keepalive list. */
@@ -1492,7 +1492,7 @@ sppp_increasing_timeout (const struct cp *cp, struct sppp *sp)
 	timo = sp->lcp.max_configure - sp->rst_counter[cp->protoidx];
 	if (timo < 1)
 		timo = 1;
-	timeout_add_sec(&sp->ch[cp->protoidx], timo * sp->lcp.timeout);
+	timeout_add_sec_kclock(&sp->ch[cp->protoidx], timo * sp->lcp.timeout);
 }
 
 void
@@ -3582,7 +3582,7 @@ sppp_chap_tlu(struct sppp *sp)
 		 */
 		i = 300 + arc4random_uniform(1 + 810 - 300);
 
-		timeout_add_sec(&sp->ch[IDX_CHAP], i);
+		timeout_add_sec_kclock(&sp->ch[IDX_CHAP], i);
 	}
 
 	if (debug) {
@@ -3829,7 +3829,7 @@ sppp_pap_open(struct sppp *sp)
 	if (sp->myauth.proto == PPP_PAP) {
 		/* we are peer, send a request, and start a timer */
 		pap.scr(sp);
-		timeout_add_sec(&sp->pap_my_to_ch, sp->lcp.timeout);
+		timeout_add_sec_kclock(&sp->pap_my_to_ch, sp->lcp.timeout);
 	}
 }
 
@@ -4098,7 +4098,7 @@ sppp_keepalive(void *dummy)
 	}
 	splx(s);
 	NET_UNLOCK();
-	timeout_add_sec(&keepalive_ch, 10);
+	timeout_add_sec_kclock(&keepalive_ch, 10);
 }
 
 /*

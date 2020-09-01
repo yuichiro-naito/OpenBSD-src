@@ -274,7 +274,7 @@ pf_syncookie_newkey(void)
 	pf_status.syncookies_inflight[pf_syncookie_status.oddeven] = 0;
 	arc4random_buf(&pf_syncookie_status.key[pf_syncookie_status.oddeven],
 	    PF_SYNCOOKIE_SECRET_SIZE);
-	timeout_add_sec(&pf_syncookie_status.keytimeout,
+	timeout_add_sec_kclock(&pf_syncookie_status.keytimeout,
 	    PF_SYNCOOKIE_SECRET_LIFETIME);
 }
 

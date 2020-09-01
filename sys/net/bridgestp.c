@@ -1752,7 +1752,7 @@ bstp_tick(void *arg)
 	}
 
 	if (ifp->if_flags & IFF_RUNNING)
-		timeout_add_sec(&bs->bs_bstptimeout, 1);
+		timeout_add_sec_kclock(&bs->bs_bstptimeout, 1);
 
 	splx(s);
 	if_put(ifp);
@@ -1923,7 +1923,7 @@ bstp_initialization(struct bstp_state *bs)
 	if (!timeout_initialized(&bs->bs_bstptimeout))
 		timeout_set_kclock(&bs->bs_bstptimeout, bstp_tick, bs, 0, KCLOCK_UPTIME);
 	if (!timeout_pending(&bs->bs_bstptimeout))
-		timeout_add_sec(&bs->bs_bstptimeout, 1);
+		timeout_add_sec_kclock(&bs->bs_bstptimeout, 1);
 
 	LIST_FOREACH(bp, &bs->bs_bplist, bp_next) {
 		bp->bp_port_id = (bp->bp_priority << 8) |

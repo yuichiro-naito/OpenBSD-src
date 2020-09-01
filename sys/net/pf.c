@@ -1291,7 +1291,7 @@ pf_purge(void *xnloops)
 	NET_UNLOCK();
 	KERNEL_UNLOCK();
 
-	timeout_add_sec(&pf_purge_to, 1);
+	timeout_add_sec_kclock(&pf_purge_to, 1);
 }
 
 int32_t
@@ -7582,7 +7582,7 @@ pf_delay_pkt(struct mbuf *m, u_int ifidx)
 	pdy->ifidx = ifidx;
 	pdy->m = m;
 	timeout_set_kclock(&pdy->to, pf_pktenqueue_delayed, pdy, 0, KCLOCK_UPTIME);
-	timeout_add_msec(&pdy->to, m->m_pkthdr.pf.delay);
+	timeout_add_msec_kclock(&pdy->to, m->m_pkthdr.pf.delay);
 	m->m_pkthdr.pf.delay = 0;
 	return (0);
 }

@@ -478,7 +478,7 @@ rtm_senddesync(struct socket *so)
 		m_freem(desync_mbuf);
 	}
 	/* Re-add timeout to try sending msg again */
-	timeout_add_msec(&rop->rop_timeout, ROUTE_DESYNC_RESEND_TIMEOUT);
+	timeout_add_msec_kclock(&rop->rop_timeout, ROUTE_DESYNC_RESEND_TIMEOUT);
 }
 
 void

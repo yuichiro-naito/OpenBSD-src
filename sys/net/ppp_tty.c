@@ -662,7 +662,7 @@ pppasyncstart(struct ppp_softc *sc)
      * drained the t_outq.
      */
     if (!idle && (sc->sc_flags & SC_TIMEOUT) == 0) {
-	timeout_add(&sc->sc_timo, 1);
+	timeout_add_kclock(&sc->sc_timo, 1);
 	sc->sc_flags |= SC_TIMEOUT;
     }
 

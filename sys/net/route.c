@@ -1397,7 +1397,7 @@ rt_timer_init(void)
 
 	LIST_INIT(&rttimer_queue_head);
 	timeout_set_kclock(&rt_timer_timeout, rt_timer_timer, &rt_timer_timeout, TIMEOUT_PROC, KCLOCK_UPTIME);
-	timeout_add_sec(&rt_timer_timeout, 1);
+	timeout_add_sec_kclock(&rt_timer_timeout, 1);
 	rt_init_done = 1;
 }
 
@@ -1539,7 +1539,7 @@ rt_timer_timer(void *arg)
 	}
 	NET_UNLOCK();
 
-	timeout_add_sec(to, 1);
+	timeout_add_sec_kclock(to, 1);
 }
 
 #ifdef MPLS
