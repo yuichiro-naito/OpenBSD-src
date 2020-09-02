@@ -1,4 +1,4 @@
-/*	$OpenBSD: scsi_base.c,v 1.269 2020/08/11 15:23:57 krw Exp $	*/
+/*	$OpenBSD: scsi_base.c,v 1.273 2020/09/01 12:17:53 krw Exp $	*/
 /*	$NetBSD: scsi_base.c,v 1.43 1997/04/02 02:29:36 mycroft Exp $	*/
 
 /*
@@ -1302,7 +1302,7 @@ scsi_do_mode_sense(struct scsi_link *link, int pg_code,
 	 * non-ATAPI, non-USB devices that don't support SCSI-2 commands
 	 * (i.e. MODE SENSE (10)) are done.
 	 */
-	if ((link->flags & (SDEV_ATAPI | SDEV_UMASS)) == 0 &&
+	if (!ISSET(link->flags, (SDEV_ATAPI | SDEV_UMASS)) &&
 	    SID_ANSII_REV(&link->inqdata) < SCSI_REV_2)
 		return error;
 
@@ -2612,11 +2612,11 @@ scsi_cmd_rw_decode(struct scsi_generic *cmd, u_int64_t *blkno,
 		*nblks = rw->length ? rw->length : 0x100;
 		break;
 	}
-	case READ_BIG:
-	case WRITE_BIG: {
-		struct scsi_rw_big *rwb = (struct scsi_rw_big *)cmd;
-		*blkno = _4btol(rwb->addr);
-		*nblks = _2btol(rwb->length);
+	case READ_10:
+	case WRITE_10: {
+		struct scsi_rw_10 *rw10 = (struct scsi_rw_10 *)cmd;
+		*blkno = _4btol(rw10->addr);
+		*nblks = _2btol(rw10->length);
 		break;
 	}
 	case READ_12:
@@ -2655,7 +2655,6 @@ const char *flagnames[] = {
 	"DB4",
 	"EJECTING",
 	"ATAPI",
-	"",
 	"UMASS",
 	"VIRTUAL",
 	"OWN_IOPL",
@@ -2667,17 +2666,11 @@ const char *quirknames[] = {
 	"NOSYNC",
 	"NOWIDE",
 	"NOTAGS",
-	"",
-	"",
-	"",
-	"",
 	"NOSYNCCACHE",
 	"NOSENSE",
 	"LITTLETOC",
 	"NOCAPACITY",
-	"",
 	"NODOORLOCK",
-	"ONLYBIG",
 	NULL
 };
 

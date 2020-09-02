@@ -1,4 +1,4 @@
-/*	$OpenBSD: ocsp.c,v 1.11 2020/08/17 16:49:28 tobhe Exp $ */
+/*	$OpenBSD: ocsp.c,v 1.18 2020/09/01 17:06:11 tobhe Exp $ */
 
 /*
  * Copyright (c) 2014 Markus Friedl
@@ -51,6 +51,7 @@ struct iked_ocsp {
 };
 
 struct ocsp_connect {
+	struct iked_sahdr	 oc_sh;
 	struct iked_socket	 oc_sock;
 	char			*oc_path;
 };
@@ -71,20 +72,43 @@ int		 ocsp_validate_finish(struct iked_ocsp *, int);
 
 /* async connect to configure ocsp-responder */
 int
-ocsp_connect(struct iked *env)
+ocsp_connect(struct iked *env, struct imsg *imsg)
 {
 	struct ocsp_connect	*oc = NULL;
+	struct iked_sahdr	 sh;
 	struct addrinfo		 hints, *res0 = NULL, *res;
+	uint8_t			*ptr;
+	size_t			 len;
 	char			*host = NULL, *port = NULL, *path = NULL;
+	char			*url, *freeme = NULL;
 	int			use_ssl, fd = -1, ret = -1, error;
 
-	if (env->sc_ocsp_url == 0) {
+	IMSG_SIZE_CHECK(imsg, &sh);
+
+	ptr = (uint8_t *)imsg->data;
+	len = IMSG_DATA_SIZE(imsg);
+
+	memcpy(&sh, ptr, sizeof(sh));
+
+	ptr += sizeof(sh);
+	len -= sizeof(sh);
+
+	if (len > 0)
+		url = freeme = get_string(ptr, len);
+	else if (env->sc_ocsp_url)
+		url = env->sc_ocsp_url;
+	else {
 		log_warnx("%s: no ocsp url", __func__);
 		goto done;
 	}
-	if (!OCSP_parse_url(env->sc_ocsp_url, &host, &port, &path, &use_ssl)) {
+	if (!OCSP_parse_url(url, &host, &port, &path, &use_ssl)) {
 		log_warnx("%s: error parsing OCSP-request-URL: %s", __func__,
-		    env->sc_ocsp_url);
+		    url);
+		goto done;
+	}
+	if (use_ssl) {
+		log_warnx("%s: OCSP over SSL not supported: %s", __func__,
+		    url);
 		goto done;
 	}
 
@@ -102,8 +126,8 @@ ocsp_connect(struct iked *env)
 	hints.ai_socktype = SOCK_STREAM;
 	error = getaddrinfo(host, port, &hints, &res0);
 	if (error) {
-		log_debug("%s: getaddrinfo(%s, %s) failed",
-		    __func__, host, port);
+		log_warn("%s: getaddrinfo(%s, %s) failed",
+		    SPI_SH(&sh, __func__), host, port);
 		goto done;
 	}
 	/* XXX just pick the first answer. we could loop instead */
@@ -118,6 +142,7 @@ ocsp_connect(struct iked *env)
 
 	oc->oc_sock.sock_fd = fd;
 	oc->oc_sock.sock_env = env;
+	oc->oc_sh = sh;
 	oc->oc_path = path;
 	path = NULL;
 
@@ -130,8 +155,8 @@ ocsp_connect(struct iked *env)
 			event_add(&oc->oc_sock.sock_ev, NULL);
 			ret = 0;
 		} else
-			log_debug("%s: error while connecting: %s", __func__,
-			    strerror(errno));
+			log_warn("%s: connect(%s, %s)",
+			    SPI_SH(&oc->oc_sh, __func__), host, port);
 	} else {
 		ocsp_connect_finish(env, fd, oc);
 		ret = 0;
@@ -139,6 +164,7 @@ ocsp_connect(struct iked *env)
  done:
 	if (res0)
 		freeaddrinfo(res0);
+	free(freeme);
 	free(host);
 	free(port);
 	free(path);
@@ -162,8 +188,8 @@ ocsp_connect_cb(int fd, short event, void *arg)
 	if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) == -1) {
 		log_warn("%s: getsockopt SOL_SOCKET SO_ERROR", __func__);
 	} else if (error) {
-		log_debug("%s: error while connecting: %s", __func__,
-		    strerror(error));
+		log_warnx("%s: error while connecting: %s",
+		    SPI_SH(&oc->oc_sh, __func__), strerror(error));
 	} else {
 		send_fd = fd;
 	}
@@ -178,18 +204,24 @@ ocsp_connect_cb(int fd, short event, void *arg)
 int
 ocsp_connect_finish(struct iked *env, int fd, struct ocsp_connect *oc)
 {
-	struct iovec		 iov[1];
-	int			 iovcnt = 1, ret;
+	struct iovec		 iov[2];
+	int			 iovcnt = 0, ret;
+
+	iov[iovcnt].iov_base = &oc->oc_sh;
+	iov[iovcnt].iov_len = sizeof(oc->oc_sh);
+	iovcnt++;
 
 	if (oc && fd >= 0) {
 		/* the imsg framework will close the FD after send */
-		iov[0].iov_base = oc->oc_path;
-		iov[0].iov_len = strlen(oc->oc_path);
+		iov[iovcnt].iov_base = oc->oc_path;
+		iov[iovcnt].iov_len = strlen(oc->oc_path);
+		iovcnt++;
 		ret = proc_composev_imsg(&env->sc_ps, PROC_CERT, -1,
 		    IMSG_OCSP_FD, -1, fd, iov, iovcnt);
 	} else {
-		ret = proc_compose_imsg(&env->sc_ps, PROC_CERT, -1,
-		    IMSG_OCSP_FD, -1, -1, NULL, 0);
+		log_info("%s: connect failed", SPI_SH(&oc->oc_sh, __func__));
+		ret = proc_composev_imsg(&env->sc_ps, PROC_CERT, -1,
+		    IMSG_OCSP_FD, -1, -1, iov, iovcnt);
 		if (fd >= 0)
 			close(fd);
 	}
@@ -206,14 +238,20 @@ ocsp_connect_finish(struct iked *env, int fd, struct ocsp_connect *oc)
 /* validate the certifcate stored in 'data' by querying the ocsp-responder */
 int
 ocsp_validate_cert(struct iked *env, void *data, size_t len,
-    struct iked_sahdr sh, uint8_t type)
+    struct iked_sahdr sh, u_int8_t type, X509 *issuer)
 {
+	struct iovec		 iov[2];
+	STACK_OF(OPENSSL_STRING) *aia; /* Authority Information Access */
 	struct iked_ocsp_entry	*ioe;
 	struct iked_ocsp	*ocsp;
 	OCSP_CERTID		*id = NULL;
-	BIO			*rawcert = NULL, *bissuer = NULL;
-	X509			*cert = NULL, *issuer = NULL;
+	char			*url;
+	BIO			*rawcert = NULL;
+	X509			*cert = NULL;
+	int			 ret, iovcnt = 0;
 
+	if (issuer == NULL)
+		return (-1);
 	if ((ioe = calloc(1, sizeof(*ioe))) == NULL)
 		return (-1);
 	if ((ocsp = calloc(1, sizeof(*ocsp))) == NULL) {
@@ -227,8 +265,6 @@ ocsp_validate_cert(struct iked *env, void *data, size_t len,
 
 	if ((rawcert = BIO_new_mem_buf(data, len)) == NULL ||
 	    (cert = d2i_X509_bio(rawcert, NULL)) == NULL ||
-	    (bissuer = BIO_new_file(IKED_OCSP_ISSUER, "r")) == NULL ||
-	    (issuer = PEM_read_bio_X509(bissuer, NULL, NULL, NULL)) == NULL ||
 	    (ocsp->ocsp_cbio = BIO_new(BIO_s_socket())) == NULL ||
 	    (ocsp->ocsp_req = OCSP_REQUEST_new()) == NULL ||
 	    (id = OCSP_cert_to_id(NULL, cert, issuer)) == NULL ||
@@ -239,16 +275,32 @@ ocsp_validate_cert(struct iked *env, void *data, size_t len,
 	ocsp->ocsp_id = id;
 
 	BIO_free(rawcert);
-	BIO_free(bissuer);
 	X509_free(cert);
-	X509_free(issuer);
 
 	ioe->ioe_ocsp = ocsp;
 	TAILQ_INSERT_TAIL(&env->sc_ocsp, ioe, ioe_entry);
 
+	/* pass SA header */
+	iov[iovcnt].iov_base = &ocsp->ocsp_sh;
+	iov[iovcnt].iov_len = sizeof(ocsp->ocsp_sh);
+	iovcnt++;
+
+	/* pass optional ocsp-url from issuer */
+	if ((aia = X509_get1_ocsp(issuer)) != NULL) {
+		url = sk_OPENSSL_STRING_value(aia, 0);
+		log_debug("%s: aia %s", __func__, url);
+		iov[iovcnt].iov_base = url;
+		iov[iovcnt].iov_len = strlen(url);
+		iovcnt++;
+	}
 	/* request connection to ocsp-responder */
-	proc_compose(&env->sc_ps, PROC_PARENT, IMSG_OCSP_FD, NULL, 0);
-	return (0);
+	ret = proc_composev(&env->sc_ps, PROC_PARENT, IMSG_OCSP_FD,
+	    iov, iovcnt);
+
+	if (aia)
+		X509_email_free(aia);	/* free stack of openssl strings */
+
+	return (ret);
 
  err:
 	ca_sslerror(__func__);
@@ -259,10 +311,6 @@ ocsp_validate_cert(struct iked *env, void *data, size_t len,
 		X509_free(cert);
 	if (id != NULL)
 		OCSP_CERTID_free(id);
-	if (bissuer != NULL)
-		BIO_free(bissuer);
-	if (issuer != NULL)
-		X509_free(issuer);
 	ocsp_validate_finish(ocsp, 0);	/* failed */
 	return (-1);
 }
@@ -278,13 +326,11 @@ ocsp_free(struct iked_ocsp *ocsp)
 		}
 		if (ocsp->ocsp_cbio != NULL)
 			BIO_free_all(ocsp->ocsp_cbio);
-		if (ocsp->ocsp_id != NULL)
-			OCSP_CERTID_free(ocsp->ocsp_id);
 
-		/* XXX not sure about ownership XXX */
 		if (ocsp->ocsp_req_ctx != NULL)
 			OCSP_REQ_CTX_free(ocsp->ocsp_req_ctx);
-		else if (ocsp->ocsp_req != NULL)
+
+		if (ocsp->ocsp_req != NULL)
 			OCSP_REQUEST_free(ocsp->ocsp_req);
 
 		free(ocsp);
@@ -296,20 +342,43 @@ int
 ocsp_receive_fd(struct iked *env, struct imsg *imsg)
 {
 	struct iked_ocsp_entry	*ioe = NULL;
-	struct iked_ocsp	*ocsp = NULL;
+	struct iked_ocsp	*ocsp = NULL, *ocsp_tmp;
 	struct iked_socket	*sock;
+	struct iked_sahdr	 sh;
+	uint8_t			*ptr;
 	char			*path = NULL;
+	size_t			 len;
 	int			 ret = -1;
 
 	log_debug("%s: received socket fd %d", __func__, imsg->fd);
-	if ((ioe = TAILQ_FIRST(&env->sc_ocsp)) == NULL) {
-		log_debug("%s: oops, no request for", __func__);
-		close(imsg->fd);
+
+	IMSG_SIZE_CHECK(imsg, &sh);
+
+	ptr = (uint8_t *)imsg->data;
+	len = IMSG_DATA_SIZE(imsg);
+
+	memcpy(&sh, ptr, sizeof(sh));
+
+	ptr += sizeof(sh);
+	len -= sizeof(sh);
+
+	TAILQ_FOREACH(ioe, &env->sc_ocsp, ioe_entry) {
+		ocsp_tmp = ioe->ioe_ocsp;
+		if (memcmp(&ocsp_tmp->ocsp_sh, &sh, sizeof(sh)) == 0)
+			break;
+	}
+	if (ioe == NULL) {
+		log_debug("%s: no pending request found", __func__);
+		if (imsg->fd != -1)
+			close(imsg->fd);
 		return (-1);
 	}
 	TAILQ_REMOVE(&env->sc_ocsp, ioe, ioe_entry);
 	ocsp = ioe->ioe_ocsp;
 	free(ioe);
+
+	if (imsg->fd == -1)
+		goto done;
 
 	if ((sock = calloc(1, sizeof(*sock))) == NULL)
 		fatal("ocsp_receive_fd: calloc sock");
@@ -320,7 +389,7 @@ ocsp_receive_fd(struct iked *env, struct imsg *imsg)
 	ocsp->ocsp_sock = sock;
 
 	/* fetch 'path' and 'fd' from imsg */
-	if ((path = get_string(imsg->data, IMSG_DATA_SIZE(imsg))) == NULL)
+	if ((path = get_string(ptr, len)) == NULL)
 		goto done;
 
 	BIO_set_fd(ocsp->ocsp_cbio, imsg->fd, BIO_NOCLOSE);
@@ -416,44 +485,46 @@ ocsp_callback(int fd, short event, void *arg)
 void
 ocsp_parse_response(struct iked_ocsp *ocsp, OCSP_RESPONSE *resp)
 {
-	int status;
-	X509_STORE *store = NULL;
-	STACK_OF(X509) *verify_other = NULL;
-	OCSP_BASICRESP *bs = NULL;
-	int verify_flags = 0;
-	ASN1_GENERALIZEDTIME *rev, *thisupd, *nextupd;
-	int reason = 0;
-	int error = 1;
+	struct iked		*env = ocsp->ocsp_env;
+	X509_STORE		*store = NULL;
+	STACK_OF(X509)		*verify_other = NULL;
+	OCSP_BASICRESP		*bs = NULL;
+	ASN1_GENERALIZEDTIME	*rev, *thisupd, *nextupd;
+	const char		*errstr;
+	int			 reason = 0, valid = 0, verify_flags = 0;
+	int			 status;
 
 	if (!resp) {
-		log_warnx("%s: error querying OCSP responder", __func__);
+		errstr = "error querying OCSP responder";
 		goto done;
 	}
 
 	status = OCSP_response_status(resp);
 	if (status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
-		log_warnx("%s: responder error: %s (%i)\n", __func__,
-		    OCSP_response_status_str(status), status);
+		errstr = OCSP_response_status_str(status);
 		goto done;
 	}
 
 	verify_other = ocsp_load_certs(IKED_OCSP_RESPCERT);
 	verify_flags |= OCSP_TRUSTOTHER;
-	if (!verify_other)
+	if (!verify_other) {
+		errstr = "no verify_other";
 		goto done;
+	}
 
 	bs = OCSP_response_get1_basic(resp);
 	if (!bs) {
-		log_warnx("%s: error parsing response", __func__);
+		errstr = "error parsing response";
 		goto done;
 	}
 
 	status = OCSP_check_nonce(ocsp->ocsp_req, bs);
 	if (status <= 0) {
 		if (status == -1)
-			log_warnx("%s: no nonce in response", __func__);
+			log_warnx("%s: no nonce in response",
+			    SPI_SH(&ocsp->ocsp_sh, __func__));
 		else {
-			log_warnx("%s: nonce verify error", __func__);
+			errstr = "nonce verify error";
 			goto done;
 		}
 	}
@@ -462,25 +533,35 @@ ocsp_parse_response(struct iked_ocsp *ocsp, OCSP_RESPONSE *resp)
 	status = OCSP_basic_verify(bs, verify_other, store, verify_flags);
 	if (status < 0)
 		status = OCSP_basic_verify(bs, NULL, store, 0);
-
 	if (status <= 0) {
 		ca_sslerror(__func__);
-		log_warnx("%s: response verify failure", __func__);
+		errstr = "response verify failure";
 		goto done;
-	} else
-		log_debug("%s: response verify ok", __func__);
+	}
+	log_debug("%s: response verify ok", SPI_SH(&ocsp->ocsp_sh, __func__));
 
 	if (!OCSP_resp_find_status(bs, ocsp->ocsp_id, &status, &reason,
 	    &rev, &thisupd, &nextupd)) {
-		log_warnx("%s: no status found", __func__);
+		errstr = "no status found";
 		goto done;
 	}
-	log_debug("%s: status: %s", __func__, OCSP_cert_status_str(status));
-
-	if (status == V_OCSP_CERTSTATUS_GOOD)
-		error = 0;
-
+	if (env->sc_ocsp_tolerate &&
+	    !OCSP_check_validity(thisupd, nextupd, env->sc_ocsp_tolerate,
+	    env->sc_ocsp_maxage)) {
+		ca_sslerror(SPI_SH(&ocsp->ocsp_sh, __func__));
+		errstr = "status times invalid";
+		goto done;
+	}
+	errstr = OCSP_cert_status_str(status);
+	if (status == V_OCSP_CERTSTATUS_GOOD) {
+		log_debug("%s: status: %s", SPI_SH(&ocsp->ocsp_sh, __func__),
+		    errstr);
+		valid = 1;
+	}
  done:
+	if (!valid) {
+		log_debug("%s: status: %s", __func__, errstr);
+	}
 	if (store)
 		X509_STORE_free(store);
 	if (verify_other)
@@ -490,7 +571,7 @@ ocsp_parse_response(struct iked_ocsp *ocsp, OCSP_RESPONSE *resp)
 	if (bs)
 		OCSP_BASICRESP_free(bs);
 
-	ocsp_validate_finish(ocsp, error == 0);
+	ocsp_validate_finish(ocsp, valid);
 }
 
 /*
