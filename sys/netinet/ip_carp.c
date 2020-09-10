@@ -864,9 +864,9 @@ carp_new_vhost(struct carp_softc *sc, int vhid, int advskew)
 	vhe->vhid = vhid;
 	vhe->advskew = advskew;
 	vhe->state = INIT;
-	timeout_set_proc(&vhe->ad_tmo, carp_timer_ad, vhe);
-	timeout_set_proc(&vhe->md_tmo, carp_timer_down, vhe);
-	timeout_set_proc(&vhe->md6_tmo, carp_timer_down, vhe);
+	timeout_set_kclock(&vhe->ad_tmo, carp_timer_ad, vhe, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&vhe->md_tmo, carp_timer_down, vhe, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&vhe->md6_tmo, carp_timer_down, vhe, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	KERNEL_ASSERT_LOCKED(); /* touching carp_vhosts */
 
@@ -1257,7 +1257,7 @@ carp_send_ad(struct carp_vhost_entry *vhe)
 retry_later:
 	sc->cur_vhe = NULL;
 	if (advbase != 255 || advskew != 255)
-		timeout_add_tv(&vhe->ad_tmo, &tv);
+		timeout_add_tv_kclock(&vhe->ad_tmo, &tv);
 	if_put(ifp);
 }
 
@@ -1605,18 +1605,18 @@ carp_setrun(struct carp_vhost_entry *vhe, sa_family_t af)
 			sc->sc_delayed_arp = -1;
 		switch (af) {
 		case AF_INET:
-			timeout_add_tv(&vhe->md_tmo, &tv);
+			timeout_add_tv_kclock(&vhe->md_tmo, &tv);
 			break;
 #ifdef INET6
 		case AF_INET6:
-			timeout_add_tv(&vhe->md6_tmo, &tv);
+			timeout_add_tv_kclock(&vhe->md6_tmo, &tv);
 			break;
 #endif /* INET6 */
 		default:
 			if (sc->sc_naddrs)
-				timeout_add_tv(&vhe->md_tmo, &tv);
+				timeout_add_tv_kclock(&vhe->md_tmo, &tv);
 			if (sc->sc_naddrs6)
-				timeout_add_tv(&vhe->md6_tmo, &tv);
+				timeout_add_tv_kclock(&vhe->md6_tmo, &tv);
 			break;
 		}
 		break;
@@ -1626,7 +1626,7 @@ carp_setrun(struct carp_vhost_entry *vhe, sa_family_t af)
 			tv.tv_usec = 1 * 1000000 / 256;
 		else
 			tv.tv_usec = vhe->advskew * 1000000 / 256;
-		timeout_add_tv(&vhe->ad_tmo, &tv);
+		timeout_add_tv_kclock(&vhe->ad_tmo, &tv);
 		break;
 	}
 }

@@ -1047,8 +1047,8 @@ swofp_create(struct switch_softc *sc)
 	arc4random_buf(&swofs->swofs_datapath_id,
 	    sizeof(swofs->swofs_datapath_id));
 
-	timeout_set(&swofs->swofs_flow_timeout, swofp_timer, sc);
-	timeout_add_sec(&swofs->swofs_flow_timeout, 10);
+	timeout_set_kclock(&swofs->swofs_flow_timeout, swofp_timer, sc, 0, KCLOCK_UPTIME);
+	timeout_add_sec_kclock(&swofs->swofs_flow_timeout, 10);
 
 	/* TODO: Configured from ifconfig  */
 	swofs->swofs_group_max_table = 1000;
@@ -1633,7 +1633,7 @@ swofp_timer(void *v)
 	struct swofp_ofs	*swofs = sc->sc_ofs;
 
 	swofp_flow_timeout(sc);
-	timeout_add_sec(&swofs->swofs_flow_timeout, 10);
+	timeout_add_sec_kclock(&swofs->swofs_flow_timeout, 10);
 }
 
 int

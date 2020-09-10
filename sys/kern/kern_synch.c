@@ -437,7 +437,7 @@ sleep_setup_timeout(struct sleep_state *sls, int timo)
 	if (timo) {
 		KASSERT((p->p_flag & P_TIMEOUT) == 0);
 		sls->sls_timeout = 1;
-		timeout_add(&p->p_sleep_to, timo);
+		timeout_add_kclock(&p->p_sleep_to, timo);
 	}
 }
 

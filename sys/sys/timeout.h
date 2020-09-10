@@ -122,10 +122,10 @@ int timeout_sysctl(void *, size_t *, void *, size_t);
 	.to_kclock = (kclock)						\
 }
 
-#define TIMEOUT_INITIALIZER_KCLOCK(fn, arg, flags, kclock)		\
+#define TIMEOUT_INITIALIZER_KCLOCK(fn, args, flags, kclock)		\
     __TIMEOUT_INITIALIZER((fn), (args), (flags) | TIMEOUT_KCLOCK, (kclock))
 
-#define TIMEOUT_INITIALIZER_FLAGS(fn, arg, flags)			\
+#define TIMEOUT_INITIALIZER_FLAGS(fn, args, flags)			\
     __TIMEOUT_INITIALIZER((fn), (args), (flags), KCLOCK_NONE)
 
 #define TIMEOUT_INITIALIZER(_f, _a)					\

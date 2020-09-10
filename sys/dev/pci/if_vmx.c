@@ -582,7 +582,8 @@ vmxnet3_alloc_rxring(struct vmxnet3_softc *sc, int queue, int intr)
 		ring->sc = sc;
 		ring->rid = i;
 		mtx_init(&ring->mtx, IPL_NET);
-		timeout_set(&ring->refill, vmxnet3_rxfill_tick, ring);
+		timeout_set_kclock(&ring->refill, vmxnet3_rxfill_tick, ring,
+				   0, KCLOCK_UPTIME);
 		for (idx = 0; idx < NRXDESC; idx++) {
 			if (bus_dmamap_create(sc->sc_dmat, JUMBO_LEN, 1,
 			    JUMBO_LEN, 0, BUS_DMA_NOWAIT, &ring->dmap[idx]))
@@ -685,7 +686,7 @@ vmxnet3_rxfill(struct vmxnet3_rxring *ring)
 	ring->gen = rgen;
 
 	if (if_rxr_inuse(&ring->rxr) == 0)
-		timeout_add(&ring->refill, 1);
+		timeout_add_kclock(&ring->refill, 1);
 }
 
 void

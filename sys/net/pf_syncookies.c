@@ -130,8 +130,8 @@ uint32_t	pf_syncookie_generate(struct pf_pdesc *, uint16_t);
 void
 pf_syncookies_init(void)
 {
-	timeout_set(&pf_syncookie_status.keytimeout,
-	    pf_syncookie_rotate, NULL);
+	timeout_set_kclock(&pf_syncookie_status.keytimeout,
+			   pf_syncookie_rotate, NULL, 0, KCLOCK_UPTIME);
 	pf_syncookie_status.hiwat = PFSTATE_HIWAT * PF_SYNCOOKIES_HIWATPCT/100;
 	pf_syncookie_status.lowat = PFSTATE_HIWAT * PF_SYNCOOKIES_LOWATPCT/100;
 	pf_syncookies_setmode(PF_SYNCOOKIES_NEVER);
@@ -274,7 +274,7 @@ pf_syncookie_newkey(void)
 	pf_status.syncookies_inflight[pf_syncookie_status.oddeven] = 0;
 	arc4random_buf(&pf_syncookie_status.key[pf_syncookie_status.oddeven],
 	    PF_SYNCOOKIE_SECRET_SIZE);
-	timeout_add_sec(&pf_syncookie_status.keytimeout,
+	timeout_add_sec_kclock(&pf_syncookie_status.keytimeout,
 	    PF_SYNCOOKIE_SECRET_LIFETIME);
 }
 

@@ -402,7 +402,7 @@ hfsc_pf_alloc(struct ifnet *ifp)
 	    M_DEVBUF, M_WAITOK | M_ZERO);
 	hif->hif_allocated = HFSC_DEFAULT_CLASSES;
 
-	timeout_set(&hif->hif_defer, hfsc_deferred, ifp);
+	timeout_set_kclock(&hif->hif_defer, hfsc_deferred, ifp, 0, KCLOCK_UPTIME);
 
 	return (hif);
 }
@@ -826,7 +826,7 @@ hfsc_enq(struct ifqueue *ifq, struct mbuf *m)
 	if (dm != m && hfsc_class_qlength(cl) == 1) {
 		hfsc_set_active(hif, cl, m->m_pkthdr.len);
 		if (!timeout_pending(&hif->hif_defer))
-			timeout_add(&hif->hif_defer, 1);
+			timeout_add_kclock(&hif->hif_defer, 1);
 	}
 
 	/* drop occurred. */
@@ -960,7 +960,7 @@ hfsc_deferred(void *arg)
 	if (hif == NULL)
 		return;
 	/* XXX HRTIMER nearest virtual/fit time is likely less than 1/HZ. */
-	timeout_add(&hif->hif_defer, 1);
+	timeout_add_kclock(&hif->hif_defer, 1);
 	ifq_q_leave(&ifp->if_snd, hif);
 }
 

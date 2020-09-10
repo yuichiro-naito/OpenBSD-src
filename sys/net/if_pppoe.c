@@ -218,7 +218,7 @@ pppoe_clone_create(struct if_clone *ifc, int unit)
 	memcpy(&sc->sc_dest, etherbroadcastaddr, sizeof(sc->sc_dest));
 
 	/* init timer for interface watchdog */
-	timeout_set_proc(&sc->sc_timeout, pppoe_timeout, sc);
+	timeout_set_kclock(&sc->sc_timeout, pppoe_timeout, sc, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	if_attach(&sc->sc_sppp.pp_if);
 	if_alloc_sadl(&sc->sc_sppp.pp_if);
@@ -583,7 +583,7 @@ breakbreak:
 			PPPOEDEBUG(("%s: failed to send PADR, error=%d\n",
 			    sc->sc_sppp.pp_if.if_xname, err));
 		}
-		timeout_add_sec(&sc->sc_timeout,
+		timeout_add_sec_kclock(&sc->sc_timeout,
 		    PPPOE_DISC_TIMEOUT * (1 + sc->sc_padr_retried));
 
 		break;
@@ -1093,7 +1093,7 @@ pppoe_timeout(void *arg)
 			PPPOEDEBUG(("%s: failed to transmit PADI, error=%d\n",
 			    sc->sc_sppp.pp_if.if_xname, err));
 		}
-		timeout_add_sec(&sc->sc_timeout, retry_wait);
+		timeout_add_sec_kclock(&sc->sc_timeout, retry_wait);
 		splx(x);
 
 		break;
@@ -1109,7 +1109,7 @@ pppoe_timeout(void *arg)
 				PPPOEDEBUG(("%s: failed to send PADI, error=%d\n",
 				    sc->sc_sppp.pp_if.if_xname, err));
 			}
-			timeout_add_sec(&sc->sc_timeout,
+			timeout_add_sec_kclock(&sc->sc_timeout,
 			    PPPOE_DISC_TIMEOUT * (1 + sc->sc_padi_retried));
 			splx(x);
 			break;
@@ -1119,7 +1119,7 @@ pppoe_timeout(void *arg)
 			PPPOEDEBUG(("%s: failed to send PADR, error=%d\n",
 			    sc->sc_sppp.pp_if.if_xname, err));
 		}
-		timeout_add_sec(&sc->sc_timeout,
+		timeout_add_sec_kclock(&sc->sc_timeout,
 		    PPPOE_DISC_TIMEOUT * (1 + sc->sc_padr_retried));
 		splx(x);
 
@@ -1153,7 +1153,7 @@ pppoe_connect(struct pppoe_softc *sc)
 		PPPOEDEBUG(("%s: failed to send PADI, error=%d\n",
 		    sc->sc_sppp.pp_if.if_xname, err));
 
-	timeout_add_sec(&sc->sc_timeout, PPPOE_DISC_TIMEOUT);
+	timeout_add_sec_kclock(&sc->sc_timeout, PPPOE_DISC_TIMEOUT);
 	splx(x);
 
 	return (err);
@@ -1353,7 +1353,7 @@ pppoe_tlf(struct sppp *sp)
 	 * function and defer disconnecting to the timeout handler.
 	 */
 	sc->sc_state = PPPOE_STATE_CLOSING;
-	timeout_add_msec(&sc->sc_timeout, 20);
+	timeout_add_msec_kclock(&sc->sc_timeout, 20);
 }
 
 static void

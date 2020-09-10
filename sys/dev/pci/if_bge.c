@@ -1315,7 +1315,7 @@ bge_fill_rx_ring_std(struct bge_softc *sc)
 	 * that now, then try again later.
 	 */
 	if (if_rxr_inuse(&sc->bge_std_ring) <= 8)
-		timeout_add(&sc->bge_rxtimeout, 1);
+		timeout_add_kclock(&sc->bge_rxtimeout, 1);
 }
 
 void
@@ -1419,7 +1419,7 @@ bge_fill_rx_ring_jumbo(struct bge_softc *sc)
 	 * that now, then try again later.
 	 */
 	if (if_rxr_inuse(&sc->bge_jumbo_ring) <= 8)
-		timeout_add(&sc->bge_rxtimeout_jumbo, 1);
+		timeout_add_kclock(&sc->bge_rxtimeout_jumbo, 1);
 }
 
 void
@@ -3125,9 +3125,9 @@ bge_attach(struct device *parent, struct device *self, void *aux)
 	if_attach(ifp);
 	ether_ifattach(ifp);
 
-	timeout_set(&sc->bge_timeout, bge_tick, sc);
-	timeout_set(&sc->bge_rxtimeout, bge_rxtick, sc);
-	timeout_set(&sc->bge_rxtimeout_jumbo, bge_rxtick_jumbo, sc);
+	timeout_set_kclock(&sc->bge_timeout, bge_tick, sc, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&sc->bge_rxtimeout, bge_rxtick, sc, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&sc->bge_rxtimeout_jumbo, bge_rxtick_jumbo, sc, 0, KCLOCK_UPTIME);
 	return;
 
 fail_6:
@@ -3788,7 +3788,7 @@ bge_tick(void *xsc)
 			mii_tick(mii);
 	}
 
-	timeout_add_sec(&sc->bge_timeout, 1);
+	timeout_add_sec_kclock(&sc->bge_timeout, 1);
 
 	splx(s);
 }
@@ -4333,7 +4333,7 @@ bge_init(void *xsc)
 
 	splx(s);
 
-	timeout_add_sec(&sc->bge_timeout, 1);
+	timeout_add_sec_kclock(&sc->bge_timeout, 1);
 }
 
 /*

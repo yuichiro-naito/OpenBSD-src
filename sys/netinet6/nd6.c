@@ -123,10 +123,13 @@ nd6_init(void)
 	nd6_init_done = 1;
 
 	/* start timer */
-	timeout_set_proc(&nd6_timer_to, nd6_timer, &nd6_timer_to);
-	timeout_set_proc(&nd6_slowtimo_ch, nd6_slowtimo, NULL);
-	timeout_add_sec(&nd6_slowtimo_ch, ND6_SLOWTIMER_INTERVAL);
-	timeout_set(&nd6_expire_timeout, nd6_expire_timer, NULL);
+	timeout_set_kclock(&nd6_timer_to, nd6_timer, &nd6_timer_to,
+			   TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&nd6_slowtimo_ch, nd6_slowtimo, NULL,
+			   TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_add_sec_kclock(&nd6_slowtimo_ch, ND6_SLOWTIMER_INTERVAL);
+	timeout_set_kclock(&nd6_expire_timeout, nd6_expire_timer, NULL,
+			   0, KCLOCK_UPTIME);
 }
 
 struct nd_ifinfo *
@@ -311,7 +314,7 @@ nd6_llinfo_settimer(struct llinfo_nd6 *ln, unsigned int secs)
 	ln->ln_rt->rt_expire = expire;
 	if (!timeout_pending(&nd6_timer_to) || expire < nd6_timer_next) {
 		nd6_timer_next = expire;
-		timeout_add_sec(&nd6_timer_to, secs);
+		timeout_add_sec_kclock(&nd6_timer_to, secs);
 	}
 }
 
@@ -339,7 +342,7 @@ nd6_timer(void *arg)
 		secs = 0;
 	if (!TAILQ_EMPTY(&nd6_list)) {
 		nd6_timer_next = getuptime() + secs;
-		timeout_add_sec(&nd6_timer_to, secs);
+		timeout_add_sec_kclock(&nd6_timer_to, secs);
 	}
 
 	NET_UNLOCK();
@@ -473,7 +476,7 @@ nd6_expire_timer_update(struct in6_ifaddr *ia6)
 		if (secs < 0)
 			secs = 0;
 
-		timeout_add_sec(&nd6_expire_timeout, secs);
+		timeout_add_sec_kclock(&nd6_expire_timeout, secs);
 		nd6_expire_next = expire_time;
 	}
 }
@@ -1301,7 +1304,7 @@ nd6_slowtimo(void *ignored_arg)
 
 	NET_LOCK();
 
-	timeout_add_sec(&nd6_slowtimo_ch, ND6_SLOWTIMER_INTERVAL);
+	timeout_add_sec_kclock(&nd6_slowtimo_ch, ND6_SLOWTIMER_INTERVAL);
 
 	TAILQ_FOREACH(ifp, &ifnet, if_list) {
 		nd6if = ND_IFINFO(ifp);
