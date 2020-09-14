@@ -197,7 +197,7 @@ pppopen(dev_t dev, struct tty *tp, struct proc *p)
     if (sc->sc_relinq)
 	(*sc->sc_relinq)(sc);	/* get previous owner to relinquish the unit */
 
-    timeout_set(&sc->sc_timo, ppp_timeout, sc);
+    timeout_set_kclock(&sc->sc_timo, ppp_timeout, sc, 0, KCLOCK_UPTIME);
     sc->sc_ilen = 0;
     sc->sc_pkt = NULL;
     bzero(sc->sc_asyncmap, sizeof(sc->sc_asyncmap));
@@ -662,7 +662,7 @@ pppasyncstart(struct ppp_softc *sc)
      * drained the t_outq.
      */
     if (!idle && (sc->sc_flags & SC_TIMEOUT) == 0) {
-	timeout_add(&sc->sc_timo, 1);
+	timeout_add_kclock(&sc->sc_timo, 1);
 	sc->sc_flags |= SC_TIMEOUT;
     }
 

@@ -2131,7 +2131,7 @@ ixgbe_allocate_queues(struct ix_softc *sc)
 		/* Set up some basics */
 		rxr->sc = sc;
 		rxr->me = i;
-		timeout_set(&rxr->rx_refill, ixgbe_rxrefill, rxr);
+		timeout_set_kclock(&rxr->rx_refill, ixgbe_rxrefill, rxr, 0, KCLOCK_UPTIME);
 
 		if (ixgbe_dma_malloc(sc, rsize,
 			&rxr->rxdma, BUS_DMA_NOWAIT)) {
@@ -2798,7 +2798,7 @@ ixgbe_rxrefill(void *xrxr)
 		IXGBE_WRITE_REG(&sc->hw, IXGBE_RDT(rxr->me),
 		    rxr->last_desc_filled);
 	} else if (if_rxr_inuse(&rxr->rx_ring) == 0)
-		timeout_add(&rxr->rx_refill, 1);
+		timeout_add_kclock(&rxr->rx_refill, 1);
 
 }
 
@@ -3656,7 +3656,7 @@ ix_kstats(struct ix_softc *sc)
 	unsigned int i;
 
 	mtx_init(&sc->sc_kstat_mtx, IPL_SOFTCLOCK);
-	timeout_set(&sc->sc_kstat_tmo, ix_kstats_tick, sc);
+	timeout_set_kclock(&sc->sc_kstat_tmo, ix_kstats_tick, sc, 0, KCLOCK_UPTIME);
 
 	ks = kstat_create(sc->dev.dv_xname, 0, "ix-stats", 0,
 	    KSTAT_T_KV, 0);
@@ -3743,7 +3743,7 @@ ix_kstats_tick(void *arg)
 	struct ix_softc *sc = arg;
 	int i;
 
-	timeout_add_sec(&sc->sc_kstat_tmo, 1);
+	timeout_add_sec_kclock(&sc->sc_kstat_tmo, 1);
 
 	mtx_enter(&sc->sc_kstat_mtx);
 	ix_kstats_read(sc->sc_kstat);

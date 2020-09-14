@@ -487,7 +487,7 @@ lacp_tick(void *arg)
 		lacp_sm_tx(lp);
 		lacp_sm_ptx_tx_schedule(lp);
 	}
-	timeout_add_sec(&lsc->lsc_callout, 1);
+	timeout_add_sec_kclock(&lsc->lsc_callout, 1);
 }
 
 int
@@ -746,8 +746,8 @@ lacp_attach(struct trunk_softc *sc)
 	lsc->lsc_port_prio = LACP_DEFAULT_PORT_PRIO;
 	lsc->lsc_ifq_prio = LACP_DEFAULT_IFQ_PRIO;
 
-	timeout_set(&lsc->lsc_transit_callout, lacp_transit_expire, lsc);
-	timeout_set(&lsc->lsc_callout, lacp_tick, lsc);
+	timeout_set_kclock(&lsc->lsc_transit_callout, lacp_transit_expire, lsc, 0, KCLOCK_UPTIME);
+	timeout_set_kclock(&lsc->lsc_callout, lacp_tick, lsc, 0, KCLOCK_UPTIME);
 	task_set(&lsc->lsc_input, lacp_input_process, lsc);
 
 	/* if the trunk is already up then do the same */
@@ -778,7 +778,7 @@ lacp_init(struct trunk_softc *sc)
 {
 	struct lacp_softc *lsc = LACP_SOFTC(sc);
 
-	timeout_add_sec(&lsc->lsc_callout, 1);
+	timeout_add_sec_kclock(&lsc->lsc_callout, 1);
 }
 
 void
@@ -840,7 +840,7 @@ lacp_suppress_distributing(struct lacp_softc *lsc, struct lacp_aggregator *la)
 	}
 
 	/* set a timeout for the marker frames */
-	timeout_add_msec(&lsc->lsc_transit_callout, LACP_TRANSIT_DELAY);
+	timeout_add_msec_kclock(&lsc->lsc_transit_callout, LACP_TRANSIT_DELAY);
 }
 
 int

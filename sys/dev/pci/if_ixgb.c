@@ -174,7 +174,7 @@ ixgb_attach(struct device *parent, struct device *self, void *aux)
 	sc = (struct ixgb_softc *)self;
 	sc->osdep.ixgb_pa = *pa;
 
-	timeout_set(&sc->timer_handle, ixgb_local_timer, sc);
+	timeout_set_kclock(&sc->timer_handle, ixgb_local_timer, sc, 0, KCLOCK_UPTIME);
 
 	/* Determine hardware revision */
 	ixgb_identify_hardware(sc);
@@ -495,7 +495,7 @@ ixgb_init(void *arg)
 	temp_reg |= IXGB_CTRL0_JFE;
 	IXGB_WRITE_REG(&sc->hw, CTRL0, temp_reg);
 
-	timeout_add_sec(&sc->timer_handle, 1);
+	timeout_add_sec_kclock(&sc->timer_handle, 1);
 	ixgb_clear_hw_cntrs(&sc->hw);
 	ixgb_enable_intr(sc);
 
@@ -539,7 +539,7 @@ ixgb_intr(void *arg)
 			timeout_del(&sc->timer_handle);
 			ixgb_check_for_link(&sc->hw);
 			ixgb_update_link_status(sc);
-			timeout_add_sec(&sc->timer_handle, 1);
+			timeout_add_sec_kclock(&sc->timer_handle, 1);
 		}
 
 		if (rxdmt0 && sc->raidc) {
@@ -801,7 +801,7 @@ ixgb_local_timer(void *arg)
 		ixgb_print_hw_stats(sc);
 #endif
 
-	timeout_add_sec(&sc->timer_handle, 1);
+	timeout_add_sec_kclock(&sc->timer_handle, 1);
 
 	splx(s);
 }

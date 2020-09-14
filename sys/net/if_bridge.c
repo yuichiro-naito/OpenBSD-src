@@ -177,7 +177,7 @@ bridge_clone_create(struct if_clone *ifc, int unit)
 
 	sc->sc_brtmax = BRIDGE_RTABLE_MAX;
 	sc->sc_brttimeout = BRIDGE_RTABLE_TIMEOUT;
-	timeout_set(&sc->sc_brtimeout, bridge_rtage, sc);
+	timeout_set_kclock(&sc->sc_brtimeout, bridge_rtage, sc, 0, KCLOCK_UPTIME);
 	SMR_SLIST_INIT(&sc->sc_iflist);
 	SMR_SLIST_INIT(&sc->sc_spanlist);
 	mtx_init(&sc->sc_mtx, IPL_MPFLOOR);
@@ -741,7 +741,7 @@ bridge_init(struct bridge_softc *sc)
 	bstp_enable(sc->sc_stp, ifp->if_index);
 
 	if (sc->sc_brttimeout != 0)
-		timeout_add_sec(&sc->sc_brtimeout, sc->sc_brttimeout);
+		timeout_add_sec_kclock(&sc->sc_brtimeout, sc->sc_brttimeout);
 
 	SET(ifp->if_flags, IFF_RUNNING);
 }
@@ -1549,10 +1549,10 @@ bridge_ipsec(struct ifnet *ifp, struct ether_header *eh, int hassnap,
 			if (tdb->tdb_first_use == 0) {
 				tdb->tdb_first_use = gettime();
 				if (tdb->tdb_flags & TDBF_FIRSTUSE)
-					timeout_add_sec(&tdb->tdb_first_tmo,
+					timeout_add_sec_kclock(&tdb->tdb_first_tmo,
 					    tdb->tdb_exp_first_use);
 				if (tdb->tdb_flags & TDBF_SOFT_FIRSTUSE)
-					timeout_add_sec(&tdb->tdb_sfirst_tmo,
+					timeout_add_sec_kclock(&tdb->tdb_sfirst_tmo,
 					    tdb->tdb_soft_first_use);
 			}
 

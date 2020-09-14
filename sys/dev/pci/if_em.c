@@ -397,8 +397,10 @@ em_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_dmat = pa->pa_dmat;
 	sc->osdep.em_pa = *pa;
 
-	timeout_set(&sc->timer_handle, em_local_timer, sc);
-	timeout_set(&sc->tx_fifo_timer_handle, em_82547_move_tail, sc);
+	timeout_set_kclock(&sc->timer_handle, em_local_timer, sc,
+			   0, KCLOCK_UPTIME);
+	timeout_set_kclock(&sc->tx_fifo_timer_handle, em_82547_move_tail, sc,
+			   0, KCLOCK_UPTIME);
 
 	/* Determine hardware revision */
 	em_identify_hardware(sc);
@@ -951,7 +953,7 @@ em_init(void *arg)
 	ifp->if_flags |= IFF_RUNNING;
 	ifq_clr_oactive(&ifp->if_snd);
 
-	timeout_add_sec(&sc->timer_handle, 1);
+	timeout_add_sec_kclock(&sc->timer_handle, 1);
 	em_clear_hw_cntrs(&sc->hw);
 	em_enable_intr(sc);
 
@@ -1315,7 +1317,7 @@ em_82547_move_tail_locked(struct em_softc *sc)
 		if (eop) {
 			if (em_82547_fifo_workaround(sc, length)) {
 				sc->tx_fifo_wrk_cnt++;
-				timeout_add(&sc->tx_fifo_timer_handle, 1);
+				timeout_add_kclock(&sc->tx_fifo_timer_handle, 1);
 				break;
 			}
 			E1000_WRITE_REG(&sc->hw, TDT(que->me), hw_tdt);
@@ -1473,7 +1475,7 @@ em_local_timer(void *arg)
 	struct em_softc *sc = arg;
 	int s;
 
-	timeout_add_sec(&sc->timer_handle, 1);
+	timeout_add_sec_kclock(&sc->timer_handle, 1);
 
 	s = splnet();
 	em_smartspeed(sc);
@@ -2844,7 +2846,7 @@ em_rxrefill(void *arg)
 	if (em_rxfill(que))
 		E1000_WRITE_REG(&sc->hw, RDT(que->me), que->rx.sc_rx_desc_head);
 	else if (if_rxr_needrefill(&que->rx.sc_rx_ring))
-		timeout_add(&que->rx_refill, 1);
+		timeout_add_kclock(&que->rx_refill, 1);
 }
 
 /*********************************************************************

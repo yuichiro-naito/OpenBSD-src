@@ -200,9 +200,9 @@ bfdset(struct rtentry *rt)
 	bfd->bc_neighbor->bn_ldiscr = arc4random();
 
 	if (!timeout_initialized(&bfd->bc_timo_rx))
-		timeout_set(&bfd->bc_timo_rx, bfd_timeout_rx, bfd);
+		timeout_set_kclock(&bfd->bc_timo_rx, bfd_timeout_rx, bfd, 0, KCLOCK_UPTIME);
 	if (!timeout_initialized(&bfd->bc_timo_tx))
-		timeout_set(&bfd->bc_timo_tx, bfd_timeout_tx, bfd);
+		timeout_set_kclock(&bfd->bc_timo_tx, bfd_timeout_tx, bfd, 0, KCLOCK_UPTIME);
 
 	task_set(&bfd->bc_bfd_task, bfd_start_task, bfd);
 	task_set(&bfd->bc_clear_task, bfd_clear_task, bfd);
@@ -413,7 +413,7 @@ bfd_send_task(void *arg)
 //rtm_bfd(bfd);
 
 	/* re-add 70%-90% jitter to our transmits, rfc 5880 6.8.7 */
-	timeout_add_usec(&bfd->bc_timo_tx,
+	timeout_add_usec_kclock(&bfd->bc_timo_tx,
 	    bfd->bc_mintx * (arc4random_uniform(20) + 70) / 100);
 }
 
@@ -701,7 +701,7 @@ bfd_timeout_rx(void *v)
 		rtm_bfd(bfd);
 	}
 
-	timeout_add_usec(&bfd->bc_timo_rx, bfd->bc_minrx);
+	timeout_add_usec_kclock(&bfd->bc_timo_rx, bfd->bc_minrx);
 }
 
 /*
@@ -895,7 +895,7 @@ bfd_input(struct bfd_config *bfd, struct mbuf *m)
 	bfd->bc_neighbor->bn_rdiag = diag;
 	m_free(m);
 
-	timeout_add_usec(&bfd->bc_timo_rx, bfd->bc_minrx);
+	timeout_add_usec_kclock(&bfd->bc_timo_rx, bfd->bc_minrx);
 
 	return;
 }

@@ -116,7 +116,7 @@ arptimer(void *arg)
 	struct llinfo_arp *la, *nla;
 
 	NET_LOCK();
-	timeout_add_sec(to, arpt_prune);
+	timeout_add_sec_kclock(to, arpt_prune);
 	LIST_FOREACH_SAFE(la, &arp_list, la_list, nla) {
 		struct rtentry *rt = la->la_rt;
 
@@ -139,8 +139,9 @@ arp_rtrequest(struct ifnet *ifp, int req, struct rtentry *rt)
 		pool_init(&arp_pool, sizeof(struct llinfo_arp), 0,
 		    IPL_SOFTNET, 0, "arp", NULL);
 
-		timeout_set_proc(&arptimer_to, arptimer, &arptimer_to);
-		timeout_add_sec(&arptimer_to, arpt_prune);
+		timeout_set_kclock(&arptimer_to, arptimer, &arptimer_to,
+				   TIMEOUT_PROC, KCLOCK_UPTIME);
+		timeout_add_sec_kclock(&arptimer_to, arpt_prune);
 	}
 
 	if (ISSET(rt->rt_flags,

@@ -125,7 +125,7 @@ int			 pf_tcp_iss_off;
 
 int		 pf_npurge;
 struct task	 pf_purge_task = TASK_INITIALIZER(pf_purge, &pf_npurge);
-struct timeout	 pf_purge_to = TIMEOUT_INITIALIZER(pf_purge_timeout, NULL);
+struct timeout	 pf_purge_to = TIMEOUT_INITIALIZER_KCLOCK(pf_purge_timeout, NULL, 0, KCLOCK_UPTIME);
 
 enum pf_test_status {
 	PF_TEST_FAIL = -1,
@@ -1291,7 +1291,7 @@ pf_purge(void *xnloops)
 	NET_UNLOCK();
 	KERNEL_UNLOCK();
 
-	timeout_add_sec(&pf_purge_to, 1);
+	timeout_add_sec_kclock(&pf_purge_to, 1);
 }
 
 int32_t
@@ -7581,8 +7581,8 @@ pf_delay_pkt(struct mbuf *m, u_int ifidx)
 	}
 	pdy->ifidx = ifidx;
 	pdy->m = m;
-	timeout_set(&pdy->to, pf_pktenqueue_delayed, pdy);
-	timeout_add_msec(&pdy->to, m->m_pkthdr.pf.delay);
+	timeout_set_kclock(&pdy->to, pf_pktenqueue_delayed, pdy, 0, KCLOCK_UPTIME);
+	timeout_add_msec_kclock(&pdy->to, m->m_pkthdr.pf.delay);
 	m->m_pkthdr.pf.delay = 0;
 	return (0);
 }

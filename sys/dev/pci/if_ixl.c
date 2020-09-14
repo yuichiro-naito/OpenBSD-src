@@ -2941,7 +2941,7 @@ ixl_rxr_alloc(struct ixl_softc *sc, unsigned int qid)
 
 	rxr->rxr_sc = sc;
 	if_rxr_init(&rxr->rxr_acct, 17, sc->sc_rx_ring_ndescs - 1);
-	timeout_set(&rxr->rxr_refill, ixl_rxrefill, rxr);
+	timeout_set_kclock(&rxr->rxr_refill, ixl_rxrefill, rxr, 0, KCLOCK_UPTIME);
 	rxr->rxr_cons = rxr->rxr_prod = 0;
 	rxr->rxr_m_head = NULL;
 	rxr->rxr_m_tail = &rxr->rxr_m_head;
@@ -3246,7 +3246,7 @@ ixl_rxfill(struct ixl_softc *sc, struct ixl_rx_ring *rxr)
 	if_rxr_put(&rxr->rxr_acct, slots);
 
 	if (if_rxr_inuse(&rxr->rxr_acct) == 0)
-		timeout_add(&rxr->rxr_refill, 1);
+		timeout_add_kclock(&rxr->rxr_refill, 1);
 	else if (post) {
 		rxr->rxr_prod = prod;
 		ixl_wr(sc, rxr->rxr_tail, prod);
@@ -5231,7 +5231,7 @@ ixl_kstat_tick(void *arg)
 {
 	struct ixl_softc *sc = arg;
 
-	timeout_add_sec(&sc->sc_kstat_tmo, 4);
+	timeout_add_sec_kclock(&sc->sc_kstat_tmo, 4);
 
 	mtx_enter(&sc->sc_kstat_mtx);
 
@@ -5291,7 +5291,7 @@ static void
 ixl_kstat_attach(struct ixl_softc *sc)
 {
 	mtx_init(&sc->sc_kstat_mtx, IPL_SOFTCLOCK);
-	timeout_set(&sc->sc_kstat_tmo, ixl_kstat_tick, sc);
+	timeout_set_kclock(&sc->sc_kstat_tmo, ixl_kstat_tick, sc, 0, KCLOCK_UPTIME);
 
 	sc->sc_port_kstat = ixl_kstat_create(sc, "ixl-port",
 	    ixl_port_counters, nitems(ixl_port_counters), sc->sc_port);
@@ -5300,7 +5300,7 @@ ixl_kstat_attach(struct ixl_softc *sc)
 	    lemtoh16(&sc->sc_vsi_number));
 
 	/* ixl counters go up even when the interface is down */
-	timeout_add_sec(&sc->sc_kstat_tmo, 4);
+	timeout_add_sec_kclock(&sc->sc_kstat_tmo, 4);
 }
 
 #endif /* NKSTAT > 0 */

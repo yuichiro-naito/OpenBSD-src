@@ -732,7 +732,7 @@ ipsp_acquire_sa(struct ipsec_policy *ipo, union sockaddr_union *gw,
 
 	ipa->ipa_addr = *gw;
 
-	timeout_set_proc(&ipa->ipa_timeout, ipsp_delete_acquire_timo, ipa);
+	timeout_set_kclock(&ipa->ipa_timeout, ipsp_delete_acquire_timo, ipa, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	ipa->ipa_info.sen_len = ipa->ipa_mask.sen_len = SENT_LEN;
 	ipa->ipa_info.sen_family = ipa->ipa_mask.sen_family = PF_KEY;
@@ -814,7 +814,7 @@ ipsp_acquire_sa(struct ipsec_policy *ipo, union sockaddr_union *gw,
 	}
 
 #ifdef IPSEC
-	timeout_add_sec(&ipa->ipa_timeout, ipsec_expire_acquire);
+	timeout_add_sec_kclock(&ipa->ipa_timeout, ipsec_expire_acquire);
 #endif
 
 	TAILQ_INSERT_TAIL(&ipsec_acquire_head, ipa, ipa_next);

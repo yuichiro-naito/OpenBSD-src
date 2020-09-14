@@ -284,7 +284,7 @@ reserve_spi(u_int rdomain, u_int32_t sspi, u_int32_t tspi,
 		if (ipsec_keep_invalid > 0) {
 			tdbp->tdb_flags |= TDBF_TIMER;
 			tdbp->tdb_exp_timeout = ipsec_keep_invalid;
-			timeout_add_sec(&tdbp->tdb_timer_tmo,
+			timeout_add_sec_kclock(&tdbp->tdb_timer_tmo,
 			    ipsec_keep_invalid);
 		}
 #endif
@@ -811,10 +811,10 @@ tdb_alloc(u_int rdomain)
 	tdbp->tdb_rdomain_post = rdomain;
 
 	/* Initialize timeouts. */
-	timeout_set_proc(&tdbp->tdb_timer_tmo, tdb_timeout, tdbp);
-	timeout_set_proc(&tdbp->tdb_first_tmo, tdb_firstuse, tdbp);
-	timeout_set_proc(&tdbp->tdb_stimer_tmo, tdb_soft_timeout, tdbp);
-	timeout_set_proc(&tdbp->tdb_sfirst_tmo, tdb_soft_firstuse, tdbp);
+	timeout_set_kclock(&tdbp->tdb_timer_tmo, tdb_timeout, tdbp, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&tdbp->tdb_first_tmo, tdb_firstuse, tdbp, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&tdbp->tdb_stimer_tmo, tdb_soft_timeout, tdbp, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_set_kclock(&tdbp->tdb_sfirst_tmo, tdb_soft_firstuse, tdbp, TIMEOUT_PROC, KCLOCK_UPTIME);
 
 	return tdbp;
 }
@@ -870,8 +870,8 @@ tdb_free(struct tdb *tdbp)
 	timeout_del(&tdbp->tdb_stimer_tmo);
 	timeout_del(&tdbp->tdb_sfirst_tmo);
 
-	timeout_set_proc(&tdbp->tdb_timer_tmo, tdb_reaper, tdbp);
-	timeout_add(&tdbp->tdb_timer_tmo, 0);
+	timeout_set_kclock(&tdbp->tdb_timer_tmo, tdb_reaper, tdbp, TIMEOUT_PROC, KCLOCK_UPTIME);
+	timeout_add_kclock(&tdbp->tdb_timer_tmo, 0);
 }
 
 void
@@ -993,7 +993,7 @@ ipsp_ids_insert(struct ipsec_ids *ids)
 	}
 	ids->id_refcount = 1;
 	DPRINTF(("%s: new ids %p flow %u\n", __func__, ids, ids->id_flow));
-	timeout_set_proc(&ids->id_timeout, ipsp_ids_timeout, ids);
+	timeout_set_kclock(&ids->id_timeout, ipsp_ids_timeout, ids, TIMEOUT_PROC, KCLOCK_UPTIME);
 	return ids;
 }
 
@@ -1037,7 +1037,7 @@ ipsp_ids_free(struct ipsec_ids *ids)
 	DPRINTF(("%s: ids %p count %d\n", __func__, ids, ids->id_refcount));
 	KASSERT(ids->id_refcount > 0);
 	if (--ids->id_refcount == 0)
-		timeout_add_sec(&ids->id_timeout, ipsec_ids_idle);
+		timeout_add_sec_kclock(&ids->id_timeout, ipsec_ids_idle);
 }
 
 static int

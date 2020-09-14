@@ -112,7 +112,7 @@ bridgectl_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		}
 		sc->sc_brttimeout = bparam->ifbrp_ctime;
 		if (bparam->ifbrp_ctime != 0)
-			timeout_add_sec(&sc->sc_brtimeout, sc->sc_brttimeout);
+			timeout_add_sec_kclock(&sc->sc_brtimeout, sc->sc_brttimeout);
 		else
 			timeout_del(&sc->sc_brtimeout);
 		break;
@@ -369,7 +369,7 @@ bridge_rtage(void *vsc)
 	mtx_leave(&sc->sc_mtx);
 
 	if (sc->sc_brttimeout != 0)
-		timeout_add_sec(&sc->sc_brtimeout, sc->sc_brttimeout);
+		timeout_add_sec_kclock(&sc->sc_brtimeout, sc->sc_brttimeout);
 }
 
 void
