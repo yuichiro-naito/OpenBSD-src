@@ -1020,7 +1020,7 @@ pfioctl(dev_t dev, u_long cmd, caddr_t addr, int flags, struct proc *p)
 				pf_status.stateid = gettime();
 				pf_status.stateid = pf_status.stateid << 32;
 			}
-			timeout_add_sec(&pf_purge_to, 1);
+			timeout_add_sec_kclock(&pf_purge_to, 1);
 			pf_create_queues();
 			DPFPRINTF(LOG_NOTICE, "pf: started");
 		}

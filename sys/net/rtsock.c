@@ -302,7 +302,7 @@ route_attach(struct socket *so, int proto)
 	rop = pool_get(&rtpcb_pool, PR_WAITOK|PR_ZERO);
 	so->so_pcb = rop;
 	/* Init the timeout structure */
-	timeout_set(&rop->rop_timeout, rtm_senddesync_timer, so);
+	timeout_set_kclock(&rop->rop_timeout, rtm_senddesync_timer, so, 0, KCLOCK_UPTIME);
 	refcnt_init(&rop->rop_refcnt);
 
 	if (curproc == NULL)
@@ -478,7 +478,7 @@ rtm_senddesync(struct socket *so)
 		m_freem(desync_mbuf);
 	}
 	/* Re-add timeout to try sending msg again */
-	timeout_add_msec(&rop->rop_timeout, ROUTE_DESYNC_RESEND_TIMEOUT);
+	timeout_add_msec_kclock(&rop->rop_timeout, ROUTE_DESYNC_RESEND_TIMEOUT);
 }
 
 void

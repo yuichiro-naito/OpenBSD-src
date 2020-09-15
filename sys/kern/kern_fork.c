@@ -166,7 +166,7 @@ thread_new(struct proc *parent, vaddr_t uaddr)
 	/*
 	 * Initialize the timeouts.
 	 */
-	timeout_set(&p->p_sleep_to, endtsleep, p);
+	timeout_set_kclock(&p->p_sleep_to, endtsleep, p, 0, KCLOCK_UPTIME);
 
 	return p;
 }

@@ -395,8 +395,9 @@ vmt_attach(struct device *parent, struct device *self, void *aux)
 
 	config_mountroot(self, vmt_tick_hook);
 
-	timeout_set(&sc->sc_tclo_tick, vmt_tclo_tick, sc);
-	timeout_add_sec(&sc->sc_tclo_tick, 1);
+	timeout_set_kclock(&sc->sc_tclo_tick, vmt_tclo_tick, sc,
+			   0, KCLOCK_UPTIME);
+	timeout_add_sec_kclock(&sc->sc_tclo_tick, 1);
 	sc->sc_tclo_ping = 1;
 
 	/* pvbus(4) key/value interface */
@@ -570,7 +571,9 @@ vmt_tick_hook(struct device *self)
 {
 	struct vmt_softc *sc = (struct vmt_softc *)self;
 
-	timeout_set(&sc->sc_tick, vmt_tick, sc);
+	timeout_set_kclock(&sc->sc_tick, vmt_tick, sc,
+			   0, KCLOCK_UPTIME);
+
 	vmt_tick(sc);
 }
 
@@ -606,7 +609,7 @@ vmt_tick(void *xarg)
 	vmt_update_guest_info(sc);
 	vmt_update_guest_uptime(sc);
 
-	timeout_add_sec(&sc->sc_tick, 15);
+	timeout_add_sec_kclock(&sc->sc_tick, 15);
 }
 
 void
@@ -1069,7 +1072,7 @@ vmt_tclo_tick(void *xarg)
 	}
 
 out:
-	timeout_add_sec(&sc->sc_tclo_tick, delay);
+	timeout_add_sec_kclock(&sc->sc_tclo_tick, delay);
 }
 
 #define BACKDOOR_OP_I386(op, frame)		\

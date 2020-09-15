@@ -137,10 +137,10 @@ ipsp_process_packet(struct mbuf *m, struct tdb *tdb, int af, int tunalready)
 	if (tdb->tdb_first_use == 0) {
 		tdb->tdb_first_use = gettime();
 		if (tdb->tdb_flags & TDBF_FIRSTUSE)
-			timeout_add_sec(&tdb->tdb_first_tmo,
+			timeout_add_sec_kclock(&tdb->tdb_first_tmo,
 			    tdb->tdb_exp_first_use);
 		if (tdb->tdb_flags & TDBF_SOFT_FIRSTUSE)
-			timeout_add_sec(&tdb->tdb_sfirst_tmo,
+			timeout_add_sec_kclock(&tdb->tdb_sfirst_tmo,
 			    tdb->tdb_soft_first_use);
 	}
 
