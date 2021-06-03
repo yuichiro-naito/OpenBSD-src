@@ -35,6 +35,7 @@
 #ifndef _SYS_GMON_H_
 #define _SYS_GMON_H_
 
+#include <sys/queue.h>
 #include <machine/profile.h>
 
 /*
@@ -136,6 +137,9 @@ struct gmonparam {
 	u_long		highpc;
 	u_long		textsize;
 	u_long		hashfraction;
+#ifndef _KERNEL
+	SLIST_ENTRY(gmonparam)	next;
+#endif
 };
 
 /*
