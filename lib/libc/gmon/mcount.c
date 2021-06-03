@@ -31,6 +31,14 @@
 #include <sys/types.h>
 #include <sys/gmon.h>
 
+#ifndef _KERNEL
+#include <stdio.h>		// for the use of '__isthreaded'.
+#include <pthread.h>
+extern pthread_key_t _gmonkey;
+extern struct gmonparam _gmondummy;
+struct gmonparam *_gmon_alloc(void);
+#endif
+
 /*
  * mcount is called on entry to each function compiled with the profiling
  * switch set.  _mcount(), which is declared in a machine-dependent way
@@ -65,7 +73,23 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 	if ((p = curcpu()->ci_gmon) == NULL)
 		return;
 #else
-	p = &_gmonparam;
+	if (__isthreaded) {
+		/* prevent re-entry via thr_getspecific */
+		if (_gmonparam.state != GMON_PROF_ON)
+			return;
+		_gmonparam.state = GMON_PROF_BUSY;
+		p = pthread_getspecific(_gmonkey);
+		if (p == NULL) {
+			/* Prevent recursive calls while allocating */
+			pthread_setspecific(_gmonkey, &_gmondummy);
+			if ((p = _gmon_alloc()) == NULL) {
+				_gmonparam.state = GMON_PROF_ON;
+				return;
+			}
+		}
+		_gmonparam.state = GMON_PROF_ON;
+	} else
+		p = &_gmonparam;
 #endif
 	/*
 	 * check that we are profiling
