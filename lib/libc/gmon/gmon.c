@@ -132,7 +132,7 @@ monstartup(u_long lowpc, u_long highpc)
 		s_scale = SCALE_1_TO_1;
 
 #ifndef _KERNEL
-        _gmondummy.state = GMON_PROF_BUSY;
+	_gmondummy.state = GMON_PROF_BUSY;
 	pthread_key_create(&_gmonkey, _gmon_destructor);
 #endif
 
@@ -235,52 +235,52 @@ static void
 _gmon_merge_two(struct gmonparam *p, struct gmonparam *q)
 {
 	u_long fromindex;
-        u_short *frompcindex, qtoindex, toindex;
-        u_long selfpc;
-        u_long endfrom;
-        long count;
-        struct tostruct *top;
+	u_short *frompcindex, qtoindex, toindex;
+	u_long selfpc;
+	u_long endfrom;
+	long count;
+	struct tostruct *top;
 
 	endfrom = (q->fromssize / sizeof(*q->froms));
-        for (fromindex = 0; fromindex < endfrom; fromindex++) {
-                if (q->froms[fromindex] == 0)
-                        continue;
-                for (qtoindex = q->froms[fromindex]; qtoindex != 0;
-                     qtoindex = q->tos[qtoindex].link) {
-                        selfpc = q->tos[qtoindex].selfpc;
-                        count = q->tos[qtoindex].count;
-                        /* cribbed from mcount */
-                        frompcindex = &p->froms[fromindex];
-                        toindex = *frompcindex;
-                        if (toindex == 0) {
-                                /*
-                                 *      first time traversing this arc
-                                 */
-                                toindex = ++p->tos[0].link;
-                                if (toindex >= p->tolimit)
-                                        /* halt further profiling */
-                                        goto overflow;
+	for (fromindex = 0; fromindex < endfrom; fromindex++) {
+		if (q->froms[fromindex] == 0)
+			continue;
+		for (qtoindex = q->froms[fromindex]; qtoindex != 0;
+		     qtoindex = q->tos[qtoindex].link) {
+			selfpc = q->tos[qtoindex].selfpc;
+			count = q->tos[qtoindex].count;
+			/* cribbed from mcount */
+			frompcindex = &p->froms[fromindex];
+			toindex = *frompcindex;
+			if (toindex == 0) {
+				/*
+				 *      first time traversing this arc
+				 */
+				toindex = ++p->tos[0].link;
+				if (toindex >= p->tolimit)
+					/* halt further profiling */
+					goto overflow;
 
-                                *frompcindex = (u_short)toindex;
-                                top = &p->tos[(size_t)toindex];
-                                top->selfpc = selfpc;
-                                top->count = count;
-                                top->link = 0;
-                                goto done;
+				*frompcindex = (u_short)toindex;
+				top = &p->tos[(size_t)toindex];
+				top->selfpc = selfpc;
+				top->count = count;
+				top->link = 0;
+				goto done;
 			}
 			top = &p->tos[(size_t)toindex];
 			if (top->selfpc == selfpc) {
 				/*
-                                 * arc at front of chain; usual case.
-                                 */
+				 * arc at front of chain; usual case.
+				 */
 				top->count+= count;
 				goto done;
 			}
 			/*
-                         * have to go looking down chain for it.
-                         * top points to what we are looking at,
-                         * we know it is not at the head of the chain.
-                         */
+			 * have to go looking down chain for it.
+			 * top points to what we are looking at,
+			 * we know it is not at the head of the chain.
+			 */
 			for (; /* goto done */; ) {
 				if (top->link == 0) {
 					/*
@@ -288,9 +288,9 @@ _gmon_merge_two(struct gmonparam *p, struct gmonparam *q)
 					 * none of the chain had
 					 * top->selfpc == selfpc.  so
 					 * we allocate a new tostruct
-                                         * and link it to the head of
-                                         * the chain.
-                                         */
+					 * and link it to the head of
+					 * the chain.
+					 */
 					toindex = ++p->tos[0].link;
 					if (toindex >= p->tolimit)
 						goto overflow;
@@ -300,16 +300,16 @@ _gmon_merge_two(struct gmonparam *p, struct gmonparam *q)
 					top->link = *frompcindex;
 					*frompcindex = (u_short)toindex;
 					goto done;
-                                }
+				}
 				/*
-                                 * otherwise, check the next arc on the chain.
-                                 */
+				 * otherwise, check the next arc on the chain.
+				 */
 				top = &p->tos[top->link];
 				if (top->selfpc == selfpc) {
 					/*
-                                         * there it is.
-                                         * add to its count.
-                                         */
+					 * there it is.
+					 * add to its count.
+					 */
 					top->count += count;
 					goto done;
 				}
