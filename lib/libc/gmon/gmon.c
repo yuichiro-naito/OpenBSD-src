@@ -181,7 +181,7 @@ _gmon_alloc(void)
 	void *addr;
 	struct gmonparam *p;
 
-        pthread_mutex_lock(&_gmonlock);
+	pthread_mutex_lock(&_gmonlock);
 	p = SLIST_FIRST(&_gmonfree);
         if (p != NULL) {
 		SLIST_REMOVE_HEAD(&_gmonfree, next);
@@ -208,15 +208,13 @@ _gmon_alloc(void)
 		if (addr == MAP_FAILED)
 			goto mapfailed;
 		p->tos = addr;
-		p->tos[0].link = 0;
-
                 pthread_mutex_lock(&_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
         }
         pthread_mutex_unlock(&_gmonlock);
         pthread_setspecific(_gmonkey, p);
 
-        return p;
+	return p;
 
 mapfailed:
 	if (p->froms != NULL) {
@@ -228,7 +226,7 @@ mapfailed:
 		p->tos = NULL;
 	}
 mapfailed_2:
-        pthread_setspecific(_gmonkey, NULL);
+	pthread_setspecific(_gmonkey, NULL);
 	ERR("_gmon_alloc: out of memory\n");
 	return NULL;
 }
@@ -243,7 +241,7 @@ _gmon_merge_two(struct gmonparam *p, struct gmonparam *q)
         long count;
         struct tostruct *top;
 
-        endfrom = (q->fromssize / sizeof(*q->froms));
+	endfrom = (q->fromssize / sizeof(*q->froms));
         for (fromindex = 0; fromindex < endfrom; fromindex++) {
                 if (q->froms[fromindex] == 0)
                         continue;
@@ -286,17 +284,16 @@ _gmon_merge_two(struct gmonparam *p, struct gmonparam *q)
 			for (; /* goto done */; ) {
 				if (top->link == 0) {
 					/*
-                                         * top is end of the chain and
-                                         * none of the chain had
-                                         * top->selfpc == selfpc.  so
-                                         * we allocate a new tostruct
+					 * top is end of the chain and
+					 * none of the chain had
+					 * top->selfpc == selfpc.  so
+					 * we allocate a new tostruct
                                          * and link it to the head of
                                          * the chain.
                                          */
 					toindex = ++p->tos[0].link;
 					if (toindex >= p->tolimit)
 						goto overflow;
-
 					top = &p->tos[(size_t)toindex];
 					top->selfpc = selfpc;
 					top->count = count;
@@ -332,17 +329,17 @@ _gmon_merge(void)
 {
 	struct gmonparam *q;
 
-        pthread_mutex_lock(&_gmonlock);
+	pthread_mutex_lock(&_gmonlock);
 
 	SLIST_FOREACH(q, &_gmonfree, next)
-                _gmon_merge_two(&_gmonparam, q);
+		_gmon_merge_two(&_gmonparam, q);
 
 	SLIST_FOREACH(q, &_gmoninuse, next) {
-                q->state = GMON_PROF_OFF;
-                _gmon_merge_two(&_gmonparam, q);
-        }
+		q->state = GMON_PROF_OFF;
+		_gmon_merge_two(&_gmonparam, q);
+	}
 
-        pthread_mutex_unlock(&_gmonlock);
+	pthread_mutex_unlock(&_gmonlock);
 }
 #endif
 
