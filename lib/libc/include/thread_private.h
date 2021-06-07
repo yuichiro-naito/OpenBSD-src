@@ -389,6 +389,7 @@ struct pthread {
 
 	/* cancel received in a delayed cancel block? */
 	int delayed_cancel;
+	void *gmonparam;
 };
 /* flags in pthread->flags */
 #define	THREAD_DONE		0x001

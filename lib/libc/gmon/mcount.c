@@ -34,7 +34,8 @@
 #ifndef _KERNEL
 #include <stdio.h>		// for the use of '__isthreaded'.
 #include <pthread.h>
-extern pthread_key_t _gmonkey;
+#include <thread_private.h>
+#include <tib.h>
 extern struct gmonparam _gmondummy;
 struct gmonparam *_gmon_alloc(void);
 #endif
@@ -74,20 +75,17 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 		return;
 #else
 	if (__isthreaded) {
-		/* prevent re-entry via thr_getspecific */
-		if (_gmonparam.state != GMON_PROF_ON)
+		pthread_t t = TIB_GET()->tib_thread;
+		p = t->gmonparam;
+		if (p == &_gmondummy)
 			return;
-		_gmonparam.state = GMON_PROF_BUSY;
-		p = pthread_getspecific(_gmonkey);
 		if (p == NULL) {
-			/* Prevent recursive calls while allocating */
-			pthread_setspecific(_gmonkey, &_gmondummy);
-			if ((p = _gmon_alloc()) == NULL) {
-				_gmonparam.state = GMON_PROF_ON;
+			// prevent recursive call of _gmon_alloc().
+			t->gmonparam = &_gmondummy;
+			if ((p = _gmon_alloc()) == NULL)
 				return;
-			}
+			t->gmonparam = p;
 		}
-		_gmonparam.state = GMON_PROF_ON;
 	} else
 		p = &_gmonparam;
 #endif
