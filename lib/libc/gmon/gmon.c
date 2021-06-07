@@ -197,6 +197,7 @@ _gmon_alloc(void)
 		p->kcountsize = 0;
                 p->froms = NULL;
                 p->tos = NULL;
+		p->state = GMON_PROF_ON;
 		addr = mmap(NULL, p->fromssize, PROT_READ|PROT_WRITE,
 			    MAP_ANON|MAP_PRIVATE, -1, 0);
 		if (addr == MAP_FAILED)

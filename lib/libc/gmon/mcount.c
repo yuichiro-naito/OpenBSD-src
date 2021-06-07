@@ -74,14 +74,20 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 		return;
 #else
 	if (__isthreaded) {
+		/* prevent re-entry via thr_getspecific */
+		if (_gmonparam.state != GMON_PROF_ON)
+			return;
+		_gmonparam.state = GMON_PROF_BUSY;
 		p = pthread_getspecific(_gmonkey);
 		if (p == NULL) {
 			/* Prevent recursive calls while allocating */
 			pthread_setspecific(_gmonkey, &_gmondummy);
-			if ((p = _gmon_alloc()) == NULL)
+			if ((p = _gmon_alloc()) == NULL) {
+				_gmonparam.state = GMON_PROF_ON;
 				return;
-		} else if (p == &_gmondummy)
-			return;
+			}
+		}
+		_gmonparam.state = GMON_PROF_ON;
 	} else
 		p = &_gmonparam;
 #endif
