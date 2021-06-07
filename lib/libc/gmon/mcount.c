@@ -75,6 +75,8 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 		return;
 #else
 	if (__isthreaded) {
+		if (_gmonparam.state != GMON_PROF_ON)
+			return;
 		pthread_t t = TIB_GET()->tib_thread;
 		p = t->gmonparam;
 		if (p == &_gmondummy)
