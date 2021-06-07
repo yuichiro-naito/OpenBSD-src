@@ -183,20 +183,20 @@ _gmon_alloc(void)
 
 	pthread_mutex_lock(&_gmonlock);
 	p = SLIST_FIRST(&_gmonfree);
-        if (p != NULL) {
+	if (p != NULL) {
 		SLIST_REMOVE_HEAD(&_gmonfree, next);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
-        } else {
-                pthread_mutex_unlock(&_gmonlock);
-                p = mmap(NULL, sizeof (struct gmonparam),
+	} else {
+		pthread_mutex_unlock(&_gmonlock);
+		p = mmap(NULL, sizeof (struct gmonparam),
 			 PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
 		if (p == MAP_FAILED)
 			goto mapfailed_2;
 		*p = _gmonparam;
 		p->kcount = NULL;
 		p->kcountsize = 0;
-                p->froms = NULL;
-                p->tos = NULL;
+		p->froms = NULL;
+		p->tos = NULL;
 		p->state = GMON_PROF_ON;
 		addr = mmap(NULL, p->fromssize, PROT_READ|PROT_WRITE,
 			    MAP_ANON|MAP_PRIVATE, -1, 0);
@@ -209,11 +209,11 @@ _gmon_alloc(void)
 		if (addr == MAP_FAILED)
 			goto mapfailed;
 		p->tos = addr;
-                pthread_mutex_lock(&_gmonlock);
+		pthread_mutex_lock(&_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
-        }
-        pthread_mutex_unlock(&_gmonlock);
-        pthread_setspecific(_gmonkey, p);
+	}
+	pthread_mutex_unlock(&_gmonlock);
+	pthread_setspecific(_gmonkey, p);
 
 	return p;
 
