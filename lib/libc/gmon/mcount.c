@@ -84,9 +84,9 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 		if (p == NULL) {
 			// prevent recursive call of _gmon_alloc().
 			t->gmonparam = &_gmondummy;
-			if ((p = _gmon_alloc()) == NULL)
+			if ((t->gmonparam = _gmon_alloc()) == NULL)
 				return;
-			t->gmonparam = p;
+			p = t->gmonparam;
 		}
 	} else
 		p = &_gmonparam;
