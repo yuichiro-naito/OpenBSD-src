@@ -32,7 +32,7 @@
 #include <sys/gmon.h>
 
 #ifndef _KERNEL
-#include <stdio.h>		// for the use of '__isthreaded'.
+#include <stdio.h>		/* for the use of '__isthreaded'. */
 #include <pthread.h>
 #include <thread_private.h>
 #include <tib.h>
@@ -82,7 +82,7 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 		if (p == &_gmondummy)
 			return;
 		if (p == NULL) {
-			// prevent recursive call of _gmon_alloc().
+			/* prevent recursive call of _gmon_alloc(). */
 			t->gmonparam = &_gmondummy;
 			if ((t->gmonparam = _gmon_alloc()) == NULL)
 				return;
