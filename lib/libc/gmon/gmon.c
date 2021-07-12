@@ -42,7 +42,6 @@
 
 struct gmonparam _gmonparam = { GMON_PROF_OFF };
 
-#ifndef _KERNEL
 #include <pthread.h>
 
 SLIST_HEAD(, gmonparam) _gmonfree = SLIST_HEAD_INITIALIZER(_gmonfree);
@@ -50,7 +49,6 @@ SLIST_HEAD(, gmonparam) _gmoninuse = SLIST_HEAD_INITIALIZER(_gmoninuse);
 pthread_mutex_t _gmonlock = PTHREAD_MUTEX_INITIALIZER;
 pthread_key_t _gmonkey;
 struct gmonparam _gmondummy;
-#endif
 
 static int	s_scale;
 /* see profil(2) where this is describe (incorrectly) */
@@ -62,12 +60,10 @@ PROTO_NORMAL(moncontrol);
 PROTO_DEPRECATED(monstartup);
 static int hertz(void);
 
-#ifndef _KERNEL
 static void _gmon_destructor(void *);
 struct gmonparam *_gmon_alloc(void);
 static void _gmon_merge(void);
 static void _gmon_merge_two(struct gmonparam *, struct gmonparam *);
-#endif
 
 void
 monstartup(u_long lowpc, u_long highpc)
@@ -131,10 +127,8 @@ monstartup(u_long lowpc, u_long highpc)
 	} else
 		s_scale = SCALE_1_TO_1;
 
-#ifndef _KERNEL
 	_gmondummy.state = GMON_PROF_BUSY;
 	pthread_key_create(&_gmonkey, _gmon_destructor);
-#endif
 
 	moncontrol(1);
 	return;
@@ -156,7 +150,6 @@ mapfailed:
 }
 __strong_alias(_monstartup,monstartup);
 
-#ifndef _KERNEL
 static void
 _gmon_destructor(void *arg)
 {
@@ -341,7 +334,6 @@ _gmon_merge(void)
 
 	pthread_mutex_unlock(&_gmonlock);
 }
-#endif
 
 
 void
@@ -444,9 +436,9 @@ _mcleanup(void)
 	    p->kcount, p->kcountsize);
 	write(log, dbuf, strlen(dbuf));
 #endif
-#ifndef _KERNEL
+
 	_gmon_merge();
-#endif
+
 	hdr = (struct gmonhdr *)&gmonhdr;
 	bzero(hdr, sizeof(*hdr));
 	hdr->lpc = p->lowpc;
