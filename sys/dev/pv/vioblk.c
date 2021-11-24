@@ -49,6 +49,7 @@
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
+#include <sys/time.h>
 #include <machine/bus.h>
 
 #include <sys/device.h>
@@ -98,6 +99,7 @@ struct virtio_blk_req {
 	bus_dmamap_t			 vr_cmdsts;
 	bus_dmamap_t			 vr_payload;
 	SLIST_ENTRY(virtio_blk_req)	 vr_list;
+	uint64_t			 vr_req_time;
 };
 
 struct vioblk_softc {
@@ -259,6 +261,9 @@ err:
 	return;
 }
 
+uint64_t vioblk_req_time = 0;
+uint32_t vioblk_req_count = 0;
+
 /*
  * vioblk_req_get() provides the SCSI layer with all the
  * resources necessary to start an I/O on the device.
@@ -361,6 +366,8 @@ vioblk_vq_done1(struct vioblk_softc *sc, struct virtio_softc *vsc,
 		xs->resid = xs->datalen - vr->vr_len;
 	}
 	vr->vr_len = VIOBLK_DONE;
+	vioblk_req_time += (rdtsc() - vr->vr_req_time);
+	vioblk_req_count++;
 	scsi_done(xs);
 }
 
@@ -479,6 +486,7 @@ vioblk_scsi_cmd(struct scsi_xfer *xs)
 
 	s = splbio();
 	vr = xs->io;
+	vr->vr_req_time = rdtsc();
 	slot = vr->vr_qe_index;
 	if (operation != VIRTIO_BLK_T_FLUSH) {
 		len = MIN(xs->datalen, sector_count * VIRTIO_BLK_SECTOR_SIZE);
@@ -690,6 +698,7 @@ vioblk_alloc_reqs(struct vioblk_softc *sc, int qsize)
 		vr->vr_qe_index = slot;
 		vq->vq_entries[slot].qe_vr_index = i;
 		vr->vr_len = VIOBLK_DONE;
+		vr->vr_req_time = 0;
 
 		r = bus_dmamap_create(sc->sc_virtio->sc_dmat,
 		    VR_DMA_END, 1, VR_DMA_END, 0,

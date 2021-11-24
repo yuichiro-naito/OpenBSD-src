@@ -3237,6 +3237,8 @@ do_upgrade() {
 	# Configure the network.
 	enable_network
 
+	sysctl hw.vioblk_req
+	sysctl hw.vioblk_count
 	# Fetch list of mirror servers and installer choices from previous runs.
 	start_cgiinfo
 
@@ -3246,8 +3248,17 @@ do_upgrade() {
 	# fsck -p non-root filesystems in /etc/fstab.
 	check_fs
 
+#	sleep 1
+
 	# Mount filesystems in /etc/fstab.
-	umount /mnt || { echo "Can't umount $ROOTDEV!"; exit; }
+	umount /mnt || {
+	    echo "Can't umount $ROOTDEV!";
+	    sysctl hw.vioblk_req
+	    sysctl hw.vioblk_count
+	    exit ;
+	}
+	sysctl hw.vioblk_req
+	sysctl hw.vioblk_count
 	mount_fs
 
 	rm -f /mnt/bsd.upgrade /mnt/auto_upgrade.conf

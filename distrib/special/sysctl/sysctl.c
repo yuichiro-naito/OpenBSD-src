@@ -44,6 +44,7 @@ struct var {
 
 int	pstring(struct var *);
 int	pint(struct var *);
+int	pquad(struct var *);
 
 struct var vars[] = {
 	{ "kern.osrelease", pstring, 2,
@@ -58,6 +59,10 @@ struct var vars[] = {
 	    { CTL_HW, HW_DISKNAMES }},
 	{ "hw.ncpufound", pint, 2,
 	    { CTL_HW, HW_NCPUFOUND }},
+	{ "hw.vioblk_req", pquad, 2,
+	    { CTL_HW, HW_VIOBLK_REQ }},
+	{ "hw.vioblk_count", pint, 2,
+	    { CTL_HW, HW_VIOBLK_COUNT }},
 #ifdef CPU_COMPATIBLE
 	{ "machdep.compatible", pstring, 2,
 	    { CTL_MACHDEP, CPU_COMPATIBLE }},
@@ -66,6 +71,21 @@ struct var vars[] = {
 
 int	nflag;
 char	*name;
+
+int
+pquad(struct var *v)
+{
+	uint64_t n;
+	size_t len = sizeof(n);
+
+	if (sysctl(v->mib, v->nmib, &n, &len, NULL, 0) != -1) {
+		if (nflag == 0)
+			printf("%s=", v->name);
+		printf("%lld\n", n);
+		return (0);
+	}
+	return (1);
+}
 
 int
 pint(struct var *v)

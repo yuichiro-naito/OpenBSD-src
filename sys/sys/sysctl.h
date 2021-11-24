@@ -929,7 +929,9 @@ struct kinfo_file {
 #define	HW_SMT			24	/* int: enable SMT/HT/CMT */
 #define	HW_NCPUONLINE		25	/* int: number of cpus being used */
 #define	HW_POWER		26	/* int: machine has wall-power */
-#define	HW_MAXID		27	/* number of valid hw ids */
+#define HW_VIOBLK_REQ		27	/* quad: sum of IO round trip time */
+#define HW_VIOBLK_COUNT		28	/* int: number of IO req was done */
+#define	HW_MAXID		29	/* number of valid hw ids */
 
 #define	CTL_HW_NAMES { \
 	{ 0, 0 }, \
@@ -959,6 +961,8 @@ struct kinfo_file {
 	{ "smt", CTLTYPE_INT }, \
 	{ "ncpuonline", CTLTYPE_INT }, \
 	{ "power", CTLTYPE_INT }, \
+	{ "vioblk_req", CTLTYPE_QUAD }, \
+	{ "vioblk_count", CTLTYPE_INT }, \
 }
 
 /*

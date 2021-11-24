@@ -660,6 +660,9 @@ int hw_power = 1;
 static int byte_order = BYTE_ORDER;
 static int page_size = PAGE_SIZE;
 
+extern uint64_t vioblk_req_time;
+extern uint32_t vioblk_req_count;
+
 const struct sysctl_bounded_args hw_vars[] = {
 	{HW_NCPU, &ncpus, SYSCTL_INT_READONLY},
 	{HW_NCPUFOUND, &ncpusfound, SYSCTL_INT_READONLY},
@@ -767,6 +770,10 @@ hw_sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp,
 	case HW_SMT:
 		return (sysctl_hwsmt(oldp, oldlenp, newp, newlen));
 #endif
+	case HW_VIOBLK_REQ:
+		return (sysctl_rdquad(oldp, oldlenp, newp, vioblk_req_time));
+	case HW_VIOBLK_COUNT:
+		return (sysctl_rdint(oldp, oldlenp, newp, vioblk_req_count));
 	default:
 		return sysctl_bounded_arr(hw_vars, nitems(hw_vars), name,
 		    namelen, oldp, oldlenp, newp, newlen);
