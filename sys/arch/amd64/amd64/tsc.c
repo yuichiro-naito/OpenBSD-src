@@ -27,6 +27,14 @@
 #include <machine/cpu.h>
 #include <machine/cpufunc.h>
 
+#define TSC_DEBUG	1
+
+#ifdef TSC_DEBUG
+#define DPRINTF(_x...)	do { printf("tsc: " _x); } while (0)
+#else
+#define DPRINTF(_x...)
+#endif
+
 #define RECALIBRATE_MAX_RETRIES		5
 #define RECALIBRATE_SMI_THRESHOLD	50000
 #define RECALIBRATE_DELAY_THRESHOLD	50
@@ -36,17 +44,9 @@ int		tsc_recalibrate;
 uint64_t	tsc_frequency;
 int		tsc_is_invariant;
 
-#define	TSC_DRIFT_MAX			250
-#define TSC_SKEW_MAX			100
-int64_t	tsc_drift_observed;
-
-volatile int64_t	tsc_sync_val;
-volatile struct cpu_info	*tsc_sync_cpu;
-
 u_int		tsc_get_timecount(struct timecounter *tc);
 void		tsc_delay(int usecs);
 
-#include "lapic.h"
 #if NLAPIC > 0
 extern u_int32_t lapic_per_second;
 #endif
@@ -236,26 +236,25 @@ cpu_recalibrate_tsc(struct timecounter *tc)
 u_int
 tsc_get_timecount(struct timecounter *tc)
 {
-	return rdtsc_lfence() + curcpu()->ci_tsc_skew;
+	return rdtsc_lfence();
 }
 
 void
 tsc_timecounter_init(struct cpu_info *ci, uint64_t cpufreq)
 {
-#ifdef TSC_DEBUG
-	printf("%s: TSC skew=%lld observed drift=%lld\n", ci->ci_dev->dv_xname,
-	    (long long)ci->ci_tsc_skew, (long long)tsc_drift_observed);
-#endif
-	if (ci->ci_tsc_skew < -TSC_SKEW_MAX || ci->ci_tsc_skew > TSC_SKEW_MAX) {
-		printf("%s: disabling user TSC (skew=%lld)\n",
-		    ci->ci_dev->dv_xname, (long long)ci->ci_tsc_skew);
-		tsc_timecounter.tc_user = 0;
+
+	KASSERT(CPU_IS_PRIMARY(ci));
+	if (!ISSET(ci->ci_flags, CPUF_CONST_TSC)) {
+		DPRINTF("cannot use timecounter: not constant\n");
+		return;
+	}
+	if (!ISSET(ci->ci_flags, CPUF_INVAR_TSC)) {
+		DPRINTF("cannot use timecounter: not invariant\n");
+		return;
 	}
 
-	if (!(ci->ci_flags & CPUF_PRIMARY) ||
-	    !(ci->ci_flags & CPUF_CONST_TSC) ||
-	    !(ci->ci_flags & CPUF_INVAR_TSC))
-		return;
+	tsc_is_invariant = 1;
+	tsc_frequency = tsc_freq_cpuid(ci);
 
 	/* Newer CPUs don't require recalibration */
 	if (tsc_frequency > 0) {
@@ -268,102 +267,19 @@ tsc_timecounter_init(struct cpu_info *ci, uint64_t cpufreq)
 		calibrate_tsc_freq();
 	}
 
-	if (tsc_drift_observed > TSC_DRIFT_MAX) {
-		printf("ERROR: %lld cycle TSC drift observed\n",
-		    (long long)tsc_drift_observed);
-		tsc_timecounter.tc_quality = -1000;
-		tsc_timecounter.tc_user = 0;
-		tsc_is_invariant = 0;
-	}
-
+	/*
+	 * We can't use the TSC as a timecounter on an MP kernel until
+	 * we've checked the synchronization in tsc_check_sync() after
+	 * booting the secondary CPUs.
+	 *
+	 * We can't use the TSC for delay(9), either, because we might
+	 * jump the TSC during tsc_check_sync(), which would violate the
+	 * assumptions in tsc_delay().
+	 */
+#ifndef MULTIPROCESSOR
+	delay_func = tsc_delay;
 	tc_init(&tsc_timecounter);
-}
-
-/*
- * Record drift (in clock cycles).  Called during AP startup.
- */
-void
-tsc_sync_drift(int64_t drift)
-{
-	if (drift < 0)
-		drift = -drift;
-	if (drift > tsc_drift_observed)
-		tsc_drift_observed = drift;
-}
-
-/*
- * Called during startup of APs, by the boot processor.  Interrupts
- * are disabled on entry.
- */
-void
-tsc_read_bp(struct cpu_info *ci, uint64_t *bptscp, uint64_t *aptscp)
-{
-	uint64_t bptsc;
-
-	if (atomic_swap_ptr(&tsc_sync_cpu, ci) != NULL)
-		panic("tsc_sync_bp: 1");
-
-	/* Flag it and read our TSC. */
-	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	bptsc = (rdtsc_lfence() >> 1);
-
-	/* Wait for remote to complete, and read ours again. */
-	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
-		membar_consumer();
-	bptsc += (rdtsc_lfence() >> 1);
-
-	/* Wait for the results to come in. */
-	while (tsc_sync_cpu == ci)
-		CPU_BUSY_CYCLE();
-	if (tsc_sync_cpu != NULL)
-		panic("tsc_sync_bp: 2");
-
-	*bptscp = bptsc;
-	*aptscp = tsc_sync_val;
-}
-
-void
-tsc_sync_bp(struct cpu_info *ci)
-{
-	uint64_t bptsc, aptsc;
-
-	tsc_read_bp(ci, &bptsc, &aptsc); /* discarded - cache effects */
-	tsc_read_bp(ci, &bptsc, &aptsc);
-
-	/* Compute final value to adjust for skew. */
-	ci->ci_tsc_skew = bptsc - aptsc;
-}
-
-/*
- * Called during startup of AP, by the AP itself.  Interrupts are
- * disabled on entry.
- */
-void
-tsc_post_ap(struct cpu_info *ci)
-{
-	uint64_t tsc;
-
-	/* Wait for go-ahead from primary. */
-	while ((ci->ci_flags & CPUF_SYNCTSC) == 0)
-		membar_consumer();
-	tsc = (rdtsc_lfence() >> 1);
-
-	/* Instruct primary to read its counter. */
-	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	tsc += (rdtsc_lfence() >> 1);
-
-	/* Post result.  Ensure the whole value goes out atomically. */
-	(void)atomic_swap_64(&tsc_sync_val, tsc);
-
-	if (atomic_swap_ptr(&tsc_sync_cpu, NULL) != ci)
-		panic("tsc_sync_ap");
-}
-
-void
-tsc_sync_ap(struct cpu_info *ci)
-{
-	tsc_post_ap(ci);
-	tsc_post_ap(ci);
+#endif
 }
 
 void
@@ -376,3 +292,273 @@ tsc_delay(int usecs)
 	while (rdtsc_lfence() - start < interval)
 		CPU_BUSY_CYCLE();
 }
+
+#ifdef MULTIPROCESSOR
+
+/* TODO how many iterations is "good enough"? */
+#define TSC_NREADS	512
+
+/* For sake of testing you can forcibly desync your TSCs. */
+/* #define TSC_DESYNC	1 */
+
+#define TSC_ADJUST_ROUNDS	5
+
+/* TODO this should be malloc'd */
+uint64_t tsc_data[MAXCPUS][TSC_NREADS];
+volatile uint32_t tsc_read_barrier[TSC_NREADS];
+volatile uint32_t tsc_compare_barrier;
+volatile uint32_t tsc_leave_barrier;
+uint32_t tsc_barrier_threshold;
+uint32_t tsc_rounds;
+int tsc_have_adjust_msr;
+volatile int tsc_sync;
+
+/*
+ * XXX Sloooow.
+ */
+static void
+selection_sort(int64_t *array, size_t n)
+{
+	uint64_t tmp;
+	size_t i, j, mindex;
+
+	for (i = 0; i < n - 1; i++) {
+		mindex = i;
+		for (j = i + 1; j < n; j++) {
+			if (array[j] < array[mindex])
+				mindex = j;
+		}
+		if (mindex != i) {
+			tmp = array[i];
+			array[i] = array[mindex];
+			array[mindex] = tmp;
+		}
+	}
+}
+
+/*
+ * Compute skew between each element of ref and data, then write
+ * the skews to data.
+ *
+ * Then sort data, compute the median, and return it to the caller.
+ *
+ * The values in ref are not modified by this routine.
+ */
+static int64_t
+find_median_skew(const uint64_t *ref, uint64_t *data, size_t size)
+{
+	int64_t a, b;
+	size_t i, mid;
+
+	/* The unsigned arithmetic isn't an issue here. */
+	for (i = 0; i < size; i++)
+		data[i] = ref[i] - data[i];
+
+	/*
+	 * Find the median skew.  Note that selection_sort() treats
+	 * these as signed elements for purposes of comparison.
+	 */
+	selection_sort((int64_t *)data, size);
+	mid = size / 2;
+	a = (int64_t)data[mid - 1];
+	b = (int64_t)data[mid];
+
+	return a / 2 + b / 2;
+}
+
+void
+x86_64_ipi_tsc_compare(struct cpu_info *ci)
+{
+	uint32_t barrier_threshold;
+	unsigned int cpu, i, j;
+	int sync;
+
+	barrier_threshold = tsc_barrier_threshold;
+	cpu = CPU_INFO_UNIT(ci);
+
+	if (tsc_rounds == 0 && tsc_have_adjust_msr) {
+		if (rdmsr(MSR_TSC_ADJUST) != 0) {
+			DPRINTF("cpu%u: zeroing TSC_ADJUST; was %lld\n",
+			    cpu, rdmsr(MSR_TSC_ADJUST));
+		}
+		wrmsr(MSR_TSC_ADJUST, 0);
+	}
+
+#ifdef TSC_DESYNC
+	if (tsc_rounds == 0) {
+		if (tsc_have_adjust_msr)
+			wrmsr(MSR_TSC_ADJUST, arc4random());
+		else
+			wrmsr_safe(MSR_TSC, rdtsc() + arc4random());
+	}
+#endif
+
+	/*
+	 * Mitigate cache effects on measurement?
+	 *
+	 * XXX I have no idea what this does.
+	 */
+	wbinvd();
+
+	for (i = 0; i < nitems(tsc_data[cpu]); i++) {
+		atomic_inc_int(&tsc_read_barrier[i]);
+		while (tsc_read_barrier[i] != barrier_threshold)
+			membar_consumer();
+		tsc_data[cpu][i] = rdtsc_lfence();
+	}
+
+	atomic_inc_int(&tsc_compare_barrier);
+	while (tsc_compare_barrier != barrier_threshold)
+		membar_consumer();
+
+	sync = 1;
+	for (i = 1; i < nitems(tsc_data[cpu]); i++) {
+		for (j = 0; j < nitems(tsc_data); j++) {
+			if (tsc_data[cpu][i] <= tsc_data[j][i - 1]) {
+				sync = 0;
+				break;
+			}
+		}
+		if (!sync)
+			break;
+	}
+	if (!sync) {
+		tsc_sync = 0;	/* global, everyone can see this. */
+		DPRINTF("cpu%u[%u] lags cpu%u[%u]: %llu <= %llu\n",
+		    cpu, i, j, i - 1, tsc_data[cpu][i], tsc_data[j][i - 1]);
+	}
+
+	atomic_inc_int(&tsc_leave_barrier);
+	while (tsc_leave_barrier != barrier_threshold)
+		membar_consumer();
+}
+
+void
+x86_64_ipi_tsc_adjust(struct cpu_info *ci)
+{
+	int64_t median;
+	uint32_t barrier_threshold;
+	unsigned int cpu, ref;
+	int failed;
+
+	KASSERT(!CPU_IS_PRIMARY(ci));
+
+	barrier_threshold = tsc_barrier_threshold;
+	cpu = CPU_INFO_UNIT(ci);
+
+	/*
+	 * Compute median skew from BSP.  Note that this clobbers the
+	 * counts we recorded in tsc_data[cpu] earlier.
+	 *
+	 * XXX Assume BSP is id 0.
+	 *
+	 * XXX BSP is not necessarily the best reference.  On NUMA
+	 * systems we should sync CPUs within a package to another
+	 * CPU in the same package to avoid latency error.
+	 */
+	ref = 0;
+	median = find_median_skew(tsc_data[ref], tsc_data[cpu],
+	    nitems(tsc_data[ref]));
+	DPRINTF("cpu%u: min=%lld max=%lld med=%lld\n",
+	    cpu, tsc_data[cpu][0], tsc_data[cpu][nitems(tsc_data[cpu]) - 1],
+	    median);
+
+	/*
+	 * Try to adjust the local TSC accordingly.
+	 *
+	 * Writing the TSC MSR is not necessarily allowed, hence
+	 * wrmsr_safe().
+	 *
+	 * Prefer MSR_TSC_ADJUST if we have it.  The write is atomic,
+	 * so we avoid the race between the RDTSC and the WRMSR wherein
+	 * we could be preempted by a hypervisor, SMM code, etc.
+	 *
+	 * XXX Maybe we shouldn't try to adjust if the median skew is
+	 * within a certain margin?
+	 */
+	if (tsc_have_adjust_msr) {
+		failed = 0;
+		wrmsr(MSR_TSC_ADJUST, rdmsr(MSR_TSC_ADJUST) + median);
+	} else {
+		failed = wrmsr_safe(MSR_TSC, rdtsc_lfence() + median);
+		DPRINTF("cpu%u: wrmsr %s\n", cpu, failed ? "failed" : "ok");
+	}
+
+	atomic_inc_int(&tsc_leave_barrier);
+	while (tsc_leave_barrier != barrier_threshold)
+		membar_consumer();
+}
+
+void
+tsc_check_sync(void)
+ {
+	struct cpu_info *ci = curcpu();
+	unsigned int i, j;
+
+	KASSERT(CPU_IS_PRIMARY(ci));
+
+	if (!tsc_is_invariant)
+		return;
+
+	tsc_barrier_threshold = ncpus;	/* XXX can we assume this? */
+	if (ISSET(ci->ci_feature_sefflags_ebx, SEFF0EBX_TSC_ADJUST))
+		tsc_have_adjust_msr = 1;
+
+	/*
+	 * Take measurements.  If we aren't synchronized, try to
+	 * adjust everyone.  Then check again.
+	 */
+	for (i = 0; i < TSC_ADJUST_ROUNDS + 1; i++) {
+		/* Reset all barriers. */
+		for (j = 0; j < nitems(tsc_read_barrier); j++)
+			tsc_read_barrier[j] = 0;
+		tsc_compare_barrier = tsc_leave_barrier = 0;
+
+		/* Measure and compare. */
+		DPRINTF("testing synchronization...\n");
+		tsc_rounds = i;
+		tsc_sync = 1;
+		x86_broadcast_ipi(X86_IPI_TSC_CMP);
+		x86_send_ipi(ci, X86_IPI_TSC_CMP);
+		if (tsc_sync)
+			break;
+
+		/* Tell everyone to sync up. */
+		if (i < TSC_ADJUST_ROUNDS) {
+			DPRINTF("not synchronized; adjusting...\n");
+			tsc_leave_barrier = 0;
+			x86_broadcast_ipi(X86_IPI_TSC_ADJ);
+			atomic_inc_int(&tsc_leave_barrier);
+			while (tsc_leave_barrier != tsc_barrier_threshold)
+				membar_consumer();
+		}
+	}
+
+#ifdef TSC_DEBUG
+	/* Manually print the stats from the final comparison. */
+	for (i = 1; i < ncpus; i++) {
+		int64_t median = find_median_skew(tsc_data[0], tsc_data[i],
+		    nitems(tsc_data[0]));
+		DPRINTF("cpu%u: min=%lld max=%lld med=%lld\n",
+		    i, tsc_data[i][0], tsc_data[i][nitems(tsc_data[i]) - 1],
+		    median);
+	}
+#endif
+
+	if (tsc_sync) {
+		if (tsc_rounds > 0) {
+			DPRINTF("synchronized after %u adjustment rounds\n",
+			    tsc_rounds);
+		} else
+			DPRINTF("already synchronized\n");
+		tc_init(&tsc_timecounter);
+	} else
+		DPRINTF("cannot use timecounter: not synchronized\n");
+
+	/*
+	 * We can use the TSC for delay(9) even if they aren't sync'd.
+	 * The only thing that matters is a constant frequency.
+	 */
+	delay_func = tsc_delay;
+}
+#endif /* MULTIPROCESSOR */

@@ -1183,6 +1183,30 @@ NENTRY(rdmsr_resume)
 	lfence
 END(rdmsr_safe)
 
+/* int wrmsr_safe(u_int32_t msr, uint64_t val) */
+ENTRY(wrmsr_safe)
+	RETGUARD_SETUP(wrmsr_safe, r10)
+
+	movl	%edi,	%ecx	/* uint32_t msr */
+
+	movl	%esi,	%eax	/* uint64_t val */
+	sarq	$32,	%rsi
+	movl	%esi,	%edx
+
+	.globl	wrmsr_safe_fault
+wrmsr_safe_fault:
+	wrmsr
+
+	xorq	%rax, 	%rax
+	RETGUARD_CHECK(wrmsr_safe, r10)
+	ret
+
+NENTRY(wrmsr_resume)
+	movq	$1,	%rax
+	RETGUARD_CHECK(wrmsr_safe, r10)
+	ret
+END(wrmsr_safe)
+
 #if NXEN > 0
 	/* Hypercall page needs to be page aligned */
 	.text

@@ -771,7 +771,8 @@ identifycpu(struct cpu_info *ci)
 #endif
 	}
 
-	tsc_timecounter_init(ci, freq);
+	if (CPU_IS_PRIMARY(ci))
+		tsc_timecounter_init(ci, freq);
 
 	cpu_topology(ci);
 #if NVMM > 0
