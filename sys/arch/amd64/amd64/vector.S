@@ -289,7 +289,7 @@ IDTVEC(trap0c)
  * to handle:
  *  - trapping in iretq to userspace and
  *  - trapping in xrstor in the kernel.
- *  - trapping when invalid MSRs are read in rdmsr_safe
+ *  - trapping when invalid MSRs are read in rdmsr_safe, etc.
  * We detect these by examining the %rip in the iretq_frame.
  * Handling them is done by updating %rip in the iretq_frame to point
  * to a stub handler of some sort and then iretq'ing to it.  For the
@@ -313,6 +313,9 @@ IDTVEC(trap0d)
 	leaq	rdmsr_safe_fault(%rip),%rcx
 	cmpq	%rcx,%rdx
 	je	.Lhandle_rdmsr_safe
+	leaq	wrmsr_safe_fault(%rip),%rcx
+	cmpq	%rcx,%rdx
+	je	.Lhandle_wrmsr_safe
 	popq	%rcx
 	popq	%rdx
 	TRAP(T_PROTFLT)
@@ -320,6 +323,11 @@ IDTVEC(trap0d)
 .Lhandle_rdmsr_safe:
 	/* rdmsr faulted; just resume in rdmsr_resume */
 	leaq	rdmsr_resume(%rip),%rcx
+	jmp	1f
+
+.Lhandle_wrmsr_safe:
+	/* wrmsr faulted; just resume in wrmsr_resume */
+	leaq	wrmsr_resume(%rip),%rcx
 	jmp	1f
 
 .Lhandle_xrstor:

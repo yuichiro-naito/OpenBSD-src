@@ -61,6 +61,8 @@
 void x86_64_ipi_nop(struct cpu_info *);
 void x86_64_ipi_halt(struct cpu_info *);
 void x86_64_ipi_wbinvd(struct cpu_info *);
+void x86_64_ipi_tsc_compare(struct cpu_info *);
+void x86_64_ipi_tsc_adjust(struct cpu_info *);
 
 #if NVMM > 0
 void x86_64_ipi_vmclear_vmm(struct cpu_info *);
@@ -108,6 +110,8 @@ void (*ipifunc[X86_NIPI])(struct cpu_info *) =
 	NULL,
 #endif
 	x86_64_ipi_wbinvd,
+	x86_64_ipi_tsc_compare,
+	x86_64_ipi_tsc_adjust,
 };
 
 void

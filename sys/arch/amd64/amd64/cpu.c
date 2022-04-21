@@ -761,10 +761,6 @@ cpu_init(struct cpu_info *ci)
 	cr4 = rcr4();
 	lcr4(cr4 & ~CR4_PGE);
 	lcr4(cr4);
-
-	/* Synchronize TSC */
-	if (cold && !CPU_IS_PRIMARY(ci))
-	      tsc_sync_ap(ci);
 #endif
 }
 
@@ -815,13 +811,15 @@ cpu_boot_secondary_processors(void)
 		ci->ci_randseed = (arc4random() & 0x7fffffff) + 1;
 		cpu_boot_secondary(ci);
 	}
+
+	extern void tsc_check_sync(void);
+	tsc_check_sync();
 }
 
 void
 cpu_start_secondary(struct cpu_info *ci)
 {
 	int i;
-	u_long s;
 
 	ci->ci_flags |= CPUF_AP;
 
@@ -841,20 +839,6 @@ cpu_start_secondary(struct cpu_info *ci)
 #if defined(MPDEBUG) && defined(DDB)
 		printf("dropping into debugger; continue from here to resume boot\n");
 		db_enter();
-#endif
-	} else {
-		/*
-		 * Synchronize time stamp counters. Invalidate cache and
-		 * synchronize twice (in tsc_sync_bp) to minimize possible
-		 * cache effects. Disable interrupts to try and rule out any
-		 * external interference.
-		 */
-		s = intr_disable();
-		wbinvd();
-		tsc_sync_bp(ci);
-		intr_restore(s);
-#ifdef TSC_DEBUG
-		printf("TSC skew=%lld\n", (long long)ci->ci_tsc_skew);
 #endif
 	}
 
@@ -880,8 +864,6 @@ void
 cpu_boot_secondary(struct cpu_info *ci)
 {
 	int i;
-	int64_t drift;
-	u_long s;
 
 	atomic_setbits_int(&ci->ci_flags, CPUF_GO);
 
@@ -894,19 +876,6 @@ cpu_boot_secondary(struct cpu_info *ci)
 		printf("dropping into debugger; continue from here to resume boot\n");
 		db_enter();
 #endif
-	} else if (cold) {
-		/* Synchronize TSC again, check for drift. */
-		drift = ci->ci_tsc_skew;
-		s = intr_disable();
-		wbinvd();
-		tsc_sync_bp(ci);
-		intr_restore(s);
-		drift -= ci->ci_tsc_skew;
-#ifdef TSC_DEBUG
-		printf("TSC skew=%lld drift=%lld\n",
-		    (long long)ci->ci_tsc_skew, (long long)drift);
-#endif
-		tsc_sync_drift(drift);
 	}
 }
 
@@ -930,15 +899,7 @@ cpu_hatch(void *v)
 	if (ci->ci_flags & CPUF_PRESENT)
 		panic("%s: already running!?", ci->ci_dev->dv_xname);
 #endif
-
-	/*
-	 * Synchronize the TSC for the first time. Note that interrupts are
-	 * off at this point.
-	 */
-	wbinvd();
 	ci->ci_flags |= CPUF_PRESENT;
-	ci->ci_tsc_skew = 0;	/* reset on resume */
-	tsc_sync_ap(ci);
 
 	lapic_enable();
 	lapic_startclock();

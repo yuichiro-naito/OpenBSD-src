@@ -398,6 +398,7 @@ struct cpu_info_full;
 void cpu_enter_pages(struct cpu_info_full *);
 
 int rdmsr_safe(u_int msr, uint64_t *);
+int wrmsr_safe(uint32_t, uint64_t);
 
 #endif /* _KERNEL */
 
