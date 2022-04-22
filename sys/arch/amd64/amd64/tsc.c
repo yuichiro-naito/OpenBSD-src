@@ -36,13 +36,6 @@ int		tsc_recalibrate;
 uint64_t	tsc_frequency;
 int		tsc_is_invariant;
 
-#define	TSC_DRIFT_MAX			250
-#define TSC_SKEW_MAX			100
-int64_t	tsc_drift_observed;
-
-volatile int64_t	tsc_sync_val;
-volatile struct cpu_info	*tsc_sync_cpu;
-
 u_int		tsc_get_timecount(struct timecounter *tc);
 void		tsc_delay(int usecs);
 
@@ -236,22 +229,12 @@ cpu_recalibrate_tsc(struct timecounter *tc)
 u_int
 tsc_get_timecount(struct timecounter *tc)
 {
-	return rdtsc_lfence() + curcpu()->ci_tsc_skew;
+	return rdtsc_lfence();
 }
 
 void
 tsc_timecounter_init(struct cpu_info *ci, uint64_t cpufreq)
 {
-#ifdef TSC_DEBUG
-	printf("%s: TSC skew=%lld observed drift=%lld\n", ci->ci_dev->dv_xname,
-	    (long long)ci->ci_tsc_skew, (long long)tsc_drift_observed);
-#endif
-	if (ci->ci_tsc_skew < -TSC_SKEW_MAX || ci->ci_tsc_skew > TSC_SKEW_MAX) {
-		printf("%s: disabling user TSC (skew=%lld)\n",
-		    ci->ci_dev->dv_xname, (long long)ci->ci_tsc_skew);
-		tsc_timecounter.tc_user = 0;
-	}
-
 	if (!(ci->ci_flags & CPUF_PRIMARY) ||
 	    !(ci->ci_flags & CPUF_CONST_TSC) ||
 	    !(ci->ci_flags & CPUF_INVAR_TSC))
@@ -268,102 +251,7 @@ tsc_timecounter_init(struct cpu_info *ci, uint64_t cpufreq)
 		calibrate_tsc_freq();
 	}
 
-	if (tsc_drift_observed > TSC_DRIFT_MAX) {
-		printf("ERROR: %lld cycle TSC drift observed\n",
-		    (long long)tsc_drift_observed);
-		tsc_timecounter.tc_quality = -1000;
-		tsc_timecounter.tc_user = 0;
-		tsc_is_invariant = 0;
-	}
-
 	tc_init(&tsc_timecounter);
-}
-
-/*
- * Record drift (in clock cycles).  Called during AP startup.
- */
-void
-tsc_sync_drift(int64_t drift)
-{
-	if (drift < 0)
-		drift = -drift;
-	if (drift > tsc_drift_observed)
-		tsc_drift_observed = drift;
-}
-
-/*
- * Called during startup of APs, by the boot processor.  Interrupts
- * are disabled on entry.
- */
-void
-tsc_read_bp(struct cpu_info *ci, uint64_t *bptscp, uint64_t *aptscp)
-{
-	uint64_t bptsc;
-
-	if (atomic_swap_ptr(&tsc_sync_cpu, ci) != NULL)
-		panic("tsc_sync_bp: 1");
-
-	/* Flag it and read our TSC. */
-	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	bptsc = (rdtsc_lfence() >> 1);
-
-	/* Wait for remote to complete, and read ours again. */
-	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
-		membar_consumer();
-	bptsc += (rdtsc_lfence() >> 1);
-
-	/* Wait for the results to come in. */
-	while (tsc_sync_cpu == ci)
-		CPU_BUSY_CYCLE();
-	if (tsc_sync_cpu != NULL)
-		panic("tsc_sync_bp: 2");
-
-	*bptscp = bptsc;
-	*aptscp = tsc_sync_val;
-}
-
-void
-tsc_sync_bp(struct cpu_info *ci)
-{
-	uint64_t bptsc, aptsc;
-
-	tsc_read_bp(ci, &bptsc, &aptsc); /* discarded - cache effects */
-	tsc_read_bp(ci, &bptsc, &aptsc);
-
-	/* Compute final value to adjust for skew. */
-	ci->ci_tsc_skew = bptsc - aptsc;
-}
-
-/*
- * Called during startup of AP, by the AP itself.  Interrupts are
- * disabled on entry.
- */
-void
-tsc_post_ap(struct cpu_info *ci)
-{
-	uint64_t tsc;
-
-	/* Wait for go-ahead from primary. */
-	while ((ci->ci_flags & CPUF_SYNCTSC) == 0)
-		membar_consumer();
-	tsc = (rdtsc_lfence() >> 1);
-
-	/* Instruct primary to read its counter. */
-	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	tsc += (rdtsc_lfence() >> 1);
-
-	/* Post result.  Ensure the whole value goes out atomically. */
-	(void)atomic_swap_64(&tsc_sync_val, tsc);
-
-	if (atomic_swap_ptr(&tsc_sync_cpu, NULL) != ci)
-		panic("tsc_sync_ap");
-}
-
-void
-tsc_sync_ap(struct cpu_info *ci)
-{
-	tsc_post_ap(ci);
-	tsc_post_ap(ci);
 }
 
 void
@@ -376,3 +264,224 @@ tsc_delay(int usecs)
 	while (rdtsc_lfence() - start < interval)
 		CPU_BUSY_CYCLE();
 }
+
+#ifdef MULTIPROCESSOR
+
+#define TSC_DEBUG 1
+
+/*
+ * Protections for global variables in this code:
+ *
+ *	1	Only set from zero to one
+ *	a	Modified atomically
+ *	b	Protected by a barrier
+ *	p	Only modified by primary CPU
+ *	s	Only modified by secondary CPU
+ */
+
+#define TSC_SYNC_MS		1	/* Test round duration */
+#define TSC_SYNC_ROUNDS		2	/* Number of test rounds */
+
+uint64_t tsc_ap_val __aligned(64);	/* [s] Latest TSC value from AP */
+uint64_t tsc_bp_val __aligned(64);	/* [p] Latest TSC value from BP */
+uint64_t tsc_sync_cycles;		/* [p] TSC cycles per test round */
+const char *tsc_ap_name;		/* [b] Name of AP */
+volatile uint64_t tsc_ap_lag;		/* [s] Biggest regression seen by AP */
+volatile u_int tsc_egress_barrier;	/* [a] Sync test end barrier */
+volatile u_int tsc_ingress_barrier;	/* [a] Sync test start barrier */
+volatile u_int tsc_sync_rounds;		/* [b] Remaining test rounds */
+volatile u_int tsc_lag_count;		/* [a] No. of regressions this round */
+int tsc_simulag;			/* [1] Regressions seen on both CPUs? */
+int tsc_is_synchronized = 1;		/* [p] TSC sync'd across all CPUs? */
+
+void tsc_reset_adjust(const struct cpu_info *);
+uint64_t tsc_test_sync(volatile const uint64_t *, uint64_t *);
+
+void
+tsc_test_sync_bp(struct cpu_info *ci)
+{
+	uint64_t bp_lag;
+	unsigned int round;
+
+	/* TSC must be constant and invariant to use it as a timecounter. */
+	if (!tsc_is_invariant)
+		return;
+#ifndef TSC_DEBUG
+	/* No point in testing again if a prior test failed. */
+	if (!tsc_is_synchronized)
+		return;
+#endif
+
+	/* Reset IA32_TSC_ADJUST if it exists. */
+	tsc_reset_adjust(ci);
+
+	/* Reset the test cycle limit and round count. */
+	tsc_sync_cycles = TSC_SYNC_MS * tsc_frequency / 1000;
+	tsc_sync_rounds = TSC_SYNC_ROUNDS;
+
+	do {
+		/*
+		 * Pass through the ingress barrier, run the test,
+		 * then wait for the AP to reach the egress barrier.
+		 */
+		atomic_inc_int(&tsc_ingress_barrier);
+		while (tsc_ingress_barrier != 2)
+			CPU_BUSY_CYCLE();
+		bp_lag = tsc_test_sync(&tsc_ap_val, &tsc_bp_val);
+		while (tsc_egress_barrier != 1)
+			CPU_BUSY_CYCLE();
+
+		/*
+		 * Report what went wrong, if anything.
+		 */
+		if (tsc_lag_count != 0) {
+			round = TSC_SYNC_ROUNDS - tsc_sync_rounds + 1;
+			printf("tsc: cpu0/%s sync round %u: %u regressions\n",
+			    tsc_ap_name, round, tsc_lag_count);
+			if (tsc_simulag) {
+				printf("tsc: cpu0/%s sync round %u: "
+				    "regressions seen by both CPUs\n",
+				    tsc_ap_name, round);
+			}
+			printf("tsc: cpu0/%s sync round %u: "
+			    "cpu0 lags %s by %llu cycles\n",
+			    tsc_ap_name, round, tsc_ap_name, bp_lag);
+			printf("tsc: cpu0/%s sync round %u: "
+			    "%s lags cpu0 by %llu cycles\n",
+			    tsc_ap_name, round, tsc_ap_name, tsc_ap_lag);
+			/*
+			 * XXX We need a tc_detach() function to actually
+			 * disable a given timecounter.  Lowering the quality
+			 * like this is a nasty hack.
+			 */
+			tsc_timecounter.tc_quality = -1000;
+			tsc_is_synchronized = 0;
+			tsc_sync_rounds = 0;
+		} else
+			tsc_sync_rounds--;
+
+		/*
+		 * Clean up for the next round.
+		 *
+		 * It is safe to reset the ingress barrier because
+		 * at this point we know the AP has reached the egress
+		 * barrier.
+		 */
+		tsc_bp_val = 0;
+		tsc_ap_val = 0;
+		tsc_ap_lag = 0;
+		tsc_ingress_barrier = 0;
+		tsc_simulag = 0;
+		tsc_lag_count = 0;
+		if (tsc_sync_rounds == 0)
+			tsc_ap_name = NULL;
+
+		/*
+		 * Pass through the egress barrier and release the AP.
+		 * The AP is responsible for resetting the barrier.
+		 */
+		if (atomic_inc_int_nv(&tsc_egress_barrier) != 2)
+			panic("%s: unexpected egress count", __func__);
+	} while (tsc_sync_rounds > 0);
+}
+
+void
+tsc_test_sync_ap(struct cpu_info *ci)
+{
+	if (!tsc_is_invariant)
+		return;
+#ifndef TSC_DEBUG
+	if (!tsc_is_synchronized)
+		return;
+#endif
+
+	tsc_reset_adjust(ci);
+
+/* #define TSC_FORCE_DESYNC (150) */
+#ifdef TSC_FORCE_DESYNC
+	wrmsr(MSR_TSC_ADJUST, TSC_FORCE_DESYNC);
+#endif
+
+	/* The BP needs our name in order to log any problems. */
+	tsc_ap_name = ci->ci_dev->dv_xname;
+
+	/*
+	 * As the AP we are only responsible for running the test,
+	 * reporting our lag, and resetting the egress barrier.
+	 * The BP sets up and tears down everything else.
+	 */
+	do {
+		atomic_inc_int(&tsc_ingress_barrier);
+		while (tsc_ingress_barrier != 2)
+			CPU_BUSY_CYCLE();
+		tsc_ap_lag = tsc_test_sync(&tsc_bp_val, &tsc_ap_val);
+		atomic_inc_int(&tsc_egress_barrier);
+		while (tsc_egress_barrier != 2)
+			CPU_BUSY_CYCLE();
+		tsc_egress_barrier = 0;
+	} while (tsc_sync_rounds > 0);
+}
+
+void
+tsc_reset_adjust(const struct cpu_info *ci)
+{
+	int64_t adj;
+
+	if (ISSET(ci->ci_feature_sefflags_ebx, SEFF0EBX_TSC_ADJUST)) {
+		adj = rdmsr(MSR_TSC_ADJUST);
+		if (adj != 0) {
+			wrmsr(MSR_TSC_ADJUST, 0);
+#if 0
+			/* XXX APs can't printf during boot or resume? */
+			printf("tsc: %s: IA32_TSC_ADJUST: %+lld -> 0",
+			    ci->ci_dev->dv_xname, (long long)adj);
+#endif
+		}
+	}
+}
+
+uint64_t
+tsc_test_sync(volatile const uint64_t *reference, uint64_t *local)
+{
+	uint64_t end, lag, max_lag, ref_latest;
+	u_int i, lag_count;
+
+	max_lag = 0;
+	i = lag_count = 0;
+
+	end = rdtsc_lfence() + tsc_sync_cycles;
+	while (*local < end) {
+		ref_latest = *reference;		/* atomic */
+		*local = rdtsc_lfence();
+
+		/*
+		 * Ensure the other CPU has a chance to run.  This is
+		 * crucial if the other CPU is our SMT sibling.  SMT
+		 * starvation can prevent this test from detecting
+		 * relatively large lags.  Eight is an arbitrary value
+		 * but it works in practice without impacting the
+		 * accuracy of the test for non-sibling threads.
+		 */
+		if (++i % 8 == 0)
+			CPU_BUSY_CYCLE();
+
+		/* Everything is fine if the count is strictly monotonic. */
+		if (ref_latest < *local)
+			continue;
+
+		/*
+		 * Otherwise, our TSC lags the other TSC.  Record the
+		 * magnitude of the problem.
+		 */
+		lag = ref_latest - *local;
+		if (max_lag < lag)
+			max_lag = lag;
+		if (atomic_inc_int_nv(&tsc_lag_count) != lag_count + 1)
+			tsc_simulag = 1;
+		lag_count = tsc_lag_count;		/* atomic */
+	}
+
+	return max_lag;
+}
+
+#endif /* MULTIPROCESSOR */
