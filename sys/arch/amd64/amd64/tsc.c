@@ -31,6 +31,9 @@
 #define RECALIBRATE_SMI_THRESHOLD	50000
 #define RECALIBRATE_DELAY_THRESHOLD	50
 
+#define TSC_SYNC_ROUNDS         1000
+#define ABS(a)                  ((a) >= 0 ? (a) : -(a))
+
 int		tsc_recalibrate;
 
 uint64_t	tsc_frequency;
@@ -40,6 +43,7 @@ int		tsc_is_invariant;
 #define TSC_SKEW_MAX			100
 int64_t	tsc_drift_observed;
 
+static uint64_t tsc_dummy_cacheline __attribute__((aligned(16)));
 volatile int64_t	tsc_sync_val;
 volatile struct cpu_info	*tsc_sync_cpu;
 
@@ -303,14 +307,16 @@ tsc_read_bp(struct cpu_info *ci, uint64_t *bptscp, uint64_t *aptscp)
 	if (atomic_swap_ptr(&tsc_sync_cpu, ci) != NULL)
 		panic("tsc_sync_bp: 1");
 
+	/* Prepare a cache miss for the other side. */
+	(void)atomic_swap_64(&tsc_dummy_cacheline, 0);
+
 	/* Flag it and read our TSC. */
 	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	bptsc = (rdtsc_lfence() >> 1);
 
 	/* Wait for remote to complete, and read ours again. */
 	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
 		membar_consumer();
-	bptsc += (rdtsc_lfence() >> 1);
+	bptsc = rdtsc_lfence();
 
 	/* Wait for the results to come in. */
 	while (tsc_sync_cpu == ci)
@@ -326,12 +332,20 @@ void
 tsc_sync_bp(struct cpu_info *ci)
 {
 	uint64_t bptsc, aptsc;
+	int64_t val, diff;
+	int i;
 
-	tsc_read_bp(ci, &bptsc, &aptsc); /* discarded - cache effects */
-	tsc_read_bp(ci, &bptsc, &aptsc);
+	val = INT64_MAX;
+	for (i = 0; i < TSC_SYNC_ROUNDS; i++) {
+		tsc_read_bp(ci, &bptsc, &aptsc);
+		diff = bptsc - aptsc;
+		if (ABS(diff) < ABS(val)) {
+			val = diff;
+		}
+	}
 
 	/* Compute final value to adjust for skew. */
-	ci->ci_tsc_skew = bptsc - aptsc;
+	ci->ci_tsc_skew = val;
 }
 
 /*
@@ -346,11 +360,14 @@ tsc_post_ap(struct cpu_info *ci)
 	/* Wait for go-ahead from primary. */
 	while ((ci->ci_flags & CPUF_SYNCTSC) == 0)
 		membar_consumer();
-	tsc = (rdtsc_lfence() >> 1);
 
 	/* Instruct primary to read its counter. */
 	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	tsc += (rdtsc_lfence() >> 1);
+
+	membar_consumer();
+	tsc = tsc_dummy_cacheline;
+	membar_consumer();
+	tsc += rdtsc_lfence();
 
 	/* Post result.  Ensure the whole value goes out atomically. */
 	(void)atomic_swap_64(&tsc_sync_val, tsc);
@@ -362,8 +379,10 @@ tsc_post_ap(struct cpu_info *ci)
 void
 tsc_sync_ap(struct cpu_info *ci)
 {
-	tsc_post_ap(ci);
-	tsc_post_ap(ci);
+	int i;
+
+	for (i = 0; i < TSC_SYNC_ROUNDS; i++)
+		tsc_post_ap(ci);
 }
 
 void
