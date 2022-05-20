@@ -214,6 +214,13 @@ void x86_broadcast_ipi(int);
 void x86_ipi_handler(void);
 void x86_setperf_ipi(struct cpu_info *);
 
+void x86_no_rendezvous_barrier(void *);
+void x86_rendezvous_action(void);
+void x86_rendezvous(void (*)(void *),
+		    void (*)(void *),
+		    void (*)(void *),
+		    void *);
+
 extern void (*ipifunc[X86_NIPI])(struct cpu_info *);
 #endif
 
