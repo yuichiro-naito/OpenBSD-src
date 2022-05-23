@@ -114,9 +114,9 @@ x86_ipi_handler(void)
 
 /* Variables needed for SMP rendezvous. */
 static volatile int x86_rv_ncpus;
-static void (*volatile x86_rv_setup_func)(void *arg);
-static void (*volatile x86_rv_action_func)(void *arg);
-static void (*volatile x86_rv_teardown_func)(void *arg);
+static void (*volatile x86_rv_setup_func)(struct cpu_info *ci, void *arg);
+static void (*volatile x86_rv_action_func)(struct cpu_info *ci, void *arg);
+static void (*volatile x86_rv_teardown_func)(struct cpu_info *ci, void *arg);
 static void *volatile x86_rv_func_arg;
 static volatile int x86_rv_waiters[4];
 
@@ -129,18 +129,18 @@ static volatile int x86_rv_waiters[4];
 struct mutex x86_ipi_mtx = MUTEX_INITIALIZER(IPL_HIGH);
 
 void
-x86_no_rendezvous_barrier(void *dummy)
+x86_no_rendezvous_barrier(struct cpu_info *ci, void *dummy)
 {
 	KASSERT(0);
 }
 
 void
-x86_rendezvous_action(void)
+x86_rendezvous_action(struct cpu_info *ci)
 {
         void *local_func_arg;
-	void (*local_setup_func)(void*);
-	void (*local_action_func)(void*);
-	void (*local_teardown_func)(void*);
+	void (*local_setup_func)(struct cpu_info *, void*);
+	void (*local_action_func)(struct cpu_info *, void*);
+	void (*local_teardown_func)(struct cpu_info *, void*);
 
         /* Ensure we have up-to-date values. */
 	atomic_add_int(&x86_rv_waiters[0], 1);
@@ -160,14 +160,14 @@ x86_rendezvous_action(void)
          */
 	if (local_setup_func != x86_no_rendezvous_barrier) {
 		if (local_setup_func != NULL)
-			local_setup_func(local_func_arg);
+			local_setup_func(ci, local_func_arg);
 		atomic_add_int(&x86_rv_waiters[1], 1);
 		while (x86_rv_waiters[1] < x86_rv_ncpus)
 			CPU_BUSY_CYCLE();
 	}
 
 	if (local_action_func != NULL)
-		local_action_func(local_func_arg);
+		local_action_func(ci, local_func_arg);
 
 
         if (local_teardown_func != x86_no_rendezvous_barrier) {
@@ -181,7 +181,7 @@ x86_rendezvous_action(void)
 			CPU_BUSY_CYCLE();
 
 		if (local_teardown_func != NULL)
-			local_teardown_func(local_func_arg);
+			local_teardown_func(ci, local_func_arg);
 	}
 
         /*
@@ -199,9 +199,9 @@ x86_rendezvous_action(void)
 }
 
 void
-x86_rendezvous(void (* setup_func)(void *),
-	       void (* action_func)(void *),
-	       void (* teardown_func)(void *),
+x86_rendezvous(void (* setup_func)(struct cpu_info *, void *),
+	       void (* action_func)(struct cpu_info *, void *),
+	       void (* teardown_func)(struct cpu_info *, void *),
 	       void *arg)
 {
 	CPU_INFO_ITERATOR cii;
@@ -233,7 +233,7 @@ x86_rendezvous(void (* setup_func)(void *),
 	/*
 	 * Call x86_rendezvous_action for myself.
 	 */
-	x86_rendezvous_action();
+	x86_rendezvous_action(self);
 
 	/*
 	 * Ensure that the master CPU waits for all the other

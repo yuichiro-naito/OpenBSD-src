@@ -172,5 +172,5 @@ x86_64_ipi_wbinvd(struct cpu_info *ci)
 void
 x86_64_ipi_rendezvous(struct cpu_info *ci)
 {
-	x86_rendezvous_action();
+	x86_rendezvous_action(ci);
 }
