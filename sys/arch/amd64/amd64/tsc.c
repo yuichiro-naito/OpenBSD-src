@@ -23,6 +23,7 @@
 #include <sys/systm.h>
 #include <sys/timetc.h>
 #include <sys/atomic.h>
+#include <sys/malloc.h>
 
 #include <machine/cpu.h>
 #include <machine/cpufunc.h>
@@ -375,4 +376,90 @@ tsc_delay(int usecs)
 	start = rdtsc_lfence();
 	while (rdtsc_lfence() - start < interval)
 		CPU_BUSY_CYCLE();
+}
+
+
+#define TEST_COUNT 1000
+
+int tsc_is_ok = 0;
+int tsc_ncpus;
+
+#define TSC_READ(x)					\
+	static void					\
+	tsc_read_##x(struct cpu_info *ci, void *d)	\
+	{						\
+		uint64_t *array = (uint64_t *)d;	\
+		array[ci->ci_cpuid * 3 + x] = rdtsc();	\
+	}						\
+
+TSC_READ(0)
+TSC_READ(1)
+TSC_READ(2)
+
+void
+tsc_comp_test(struct cpu_info *ci, void *d)
+{
+	uint64_t *tsc;
+	int64_t d1, d2;
+	u_int cpu = ci->ci_cpuid;
+	u_int i, j, size;
+
+	size = tsc_ncpus * 3;
+	for (i = 0, tsc = d; i < TEST_COUNT; i++, tsc += size)
+		for (j = 0; j < tsc_ncpus; j++) {
+			if (j == cpu)
+				continue;
+			d1 = tsc[cpu * 3 + 1] - tsc[j * 3];
+			d2 = tsc[cpu * 3 + 2] - tsc[j * 3 + 1];
+			if (d1 <= 0 || d2 <= 0) {
+				tsc_is_ok = 0;
+				return;
+			}
+		}
+}
+
+void
+tsc_sync_test(void)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+	int i, len, ncpus = 0;
+	uint64_t *data;
+	printf("TSC: sync test start\n");
+
+	CPU_INFO_FOREACH(cii, ci)
+		ncpus++;
+	tsc_ncpus = ncpus;
+
+	len = sizeof(uint64_t) * ncpus * 3 * TEST_COUNT;
+	data = malloc(len, M_TEMP, M_WAITOK);
+	memset(data, 0, len);
+
+	for (i = 0; i < TEST_COUNT; i++)
+		x86_rendezvous(tsc_read_0,
+			       tsc_read_1,
+			       tsc_read_2,
+			       &data[ncpus * i * 3]);
+
+	tsc_is_ok = 1;
+	x86_rendezvous(x86_no_rendezvous_barrier,
+		       tsc_comp_test,
+		       x86_no_rendezvous_barrier,
+		       data);
+#if 0
+	printf("TSC: results\n");
+	for (i = 0; i < TEST_COUNT; i++) {
+		for (int j = 0; j < ncpus; j++)
+			printf("  %lld", data[(i * ncpus + j) * 3]);
+		printf("\n");
+		for (int j = 0; j < ncpus; j++)
+			printf("  %lld", data[(i * ncpus + j) * 3 + 1]);
+		printf("\n");
+		for (int j = 0; j < ncpus; j++)
+			printf("  %lld", data[(i * ncpus + j) * 3 + 2]);
+		printf("\n");
+	}
+#endif
+	free(data, M_TEMP, len);
+	printf("TSC: sync test end with %d\n", tsc_is_ok);
 }
