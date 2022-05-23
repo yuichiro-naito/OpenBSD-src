@@ -208,10 +208,8 @@ x86_rendezvous(void (* setup_func)(struct cpu_info *, void *),
 	struct cpu_info *ci, *self = curcpu();
         int ncpus = 0;
 
-	CPU_INFO_FOREACH(cii, ci) {
-		if (ci != self)
-			ncpus++;
-	}
+	CPU_INFO_FOREACH(cii, ci)
+		ncpus++;
 	if (ncpus == 0)
 		return;
 
