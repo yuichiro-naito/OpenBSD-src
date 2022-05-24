@@ -379,7 +379,7 @@ tsc_delay(int usecs)
 }
 
 
-#define TEST_COUNT 1000
+#define TEST_COUNT 10
 
 int tsc_is_ok = 0;
 int tsc_ncpus;
@@ -446,17 +446,24 @@ tsc_sync_test(void)
 		       tsc_comp_test,
 		       x86_no_rendezvous_barrier,
 		       data);
-#if 0
+#if 1
 	printf("TSC: results\n");
 	for (i = 0; i < TEST_COUNT; i++) {
-		for (int j = 0; j < ncpus; j++)
-			printf("  %lld", data[(i * ncpus + j) * 3]);
+		uint64_t b;
+		b = data[(i * ncpus) * 3];
+		printf("  %lld", b);
+		for (int j = 1; j < ncpus; j++)
+			printf("  %lld", b - data[(i * ncpus + j) * 3]);
 		printf("\n");
-		for (int j = 0; j < ncpus; j++)
-			printf("  %lld", data[(i * ncpus + j) * 3 + 1]);
+		b = data[(i * ncpus) * 3 + 1];
+		printf("  %lld", b);
+		for (int j = 1; j < ncpus; j++)
+			printf("  %lld", b - data[(i * ncpus + j) * 3 + 1]);
 		printf("\n");
-		for (int j = 0; j < ncpus; j++)
-			printf("  %lld", data[(i * ncpus + j) * 3 + 2]);
+		b = data[(i * ncpus) * 3 + 2];
+		printf("  %lld", b);
+		for (int j = 1; j < ncpus; j++)
+			printf("  %lld", b - data[(i * ncpus + j) * 3 + 2]);
 		printf("\n");
 	}
 #endif
