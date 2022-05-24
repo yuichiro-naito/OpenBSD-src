@@ -137,12 +137,12 @@ x86_no_rendezvous_barrier(struct cpu_info *ci, void *dummy)
 void
 x86_rendezvous_action(struct cpu_info *ci)
 {
-        void *local_func_arg;
+	void *local_func_arg;
 	void (*local_setup_func)(struct cpu_info *, void*);
 	void (*local_action_func)(struct cpu_info *, void*);
 	void (*local_teardown_func)(struct cpu_info *, void*);
 
-        /* Ensure we have up-to-date values. */
+	/* Ensure we have up-to-date values. */
 	atomic_add_int(&x86_rv_waiters[0], 1);
 	while (x86_rv_waiters[0] < x86_rv_ncpus)
 		CPU_BUSY_CYCLE();
@@ -153,11 +153,11 @@ x86_rendezvous_action(struct cpu_info *ci)
 	local_action_func = x86_rv_action_func;
 	local_teardown_func = x86_rv_teardown_func;
 
-        /*
-         * If requested, run a setup function before the main action
-         * function.  Ensure all CPUs have completed the setup
-         * function before moving on to the action function.
-         */
+	/*
+	 * If requested, run a setup function before the main action
+	 * function.  Ensure all CPUs have completed the setup
+	 * function before moving on to the action function.
+	 */
 	if (local_setup_func != x86_no_rendezvous_barrier) {
 		if (local_setup_func != NULL)
 			local_setup_func(ci, local_func_arg);
@@ -170,7 +170,7 @@ x86_rendezvous_action(struct cpu_info *ci)
 		local_action_func(ci, local_func_arg);
 
 
-        if (local_teardown_func != x86_no_rendezvous_barrier) {
+	if (local_teardown_func != x86_no_rendezvous_barrier) {
 		/*
 		 * Signal that the main action has been completed.  If a
 		 * full exit rendezvous is requested, then all CPUs will
@@ -184,7 +184,7 @@ x86_rendezvous_action(struct cpu_info *ci)
 			local_teardown_func(ci, local_func_arg);
 	}
 
-        /*
+	/*
 	 * Signal that the rendezvous is fully completed by this CPU.
 	 * This means that no member of x86_rv_* pseudo-structure will be
 	 * accessed by this target CPU after this point; in particular,
@@ -206,7 +206,7 @@ x86_rendezvous(void (* setup_func)(struct cpu_info *, void *),
 {
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci, *self = curcpu();
-        int ncpus = 0;
+	int ncpus = 0;
 
 	CPU_INFO_FOREACH(cii, ci)
 		ncpus++;
@@ -215,7 +215,7 @@ x86_rendezvous(void (* setup_func)(struct cpu_info *, void *),
 
 	mtx_enter(&x86_ipi_mtx);
 
-        /* Pass rendezvous parameters via global variables. */
+	/* Pass rendezvous parameters via global variables. */
 	x86_rv_ncpus = ncpus;
 	x86_rv_setup_func = setup_func;
 	x86_rv_action_func = action_func;
