@@ -453,17 +453,17 @@ tsc_sync_test(void)
 		b = data[(i * ncpus) * 3];
 		printf("  %lld", b);
 		for (int j = 1; j < ncpus; j++)
-			printf("  %lld", b - data[(i * ncpus + j) * 3]);
+			printf("  %lld", data[(i * ncpus + j) * 3] - b);
 		printf("\n");
 		b = data[(i * ncpus) * 3 + 1];
 		printf("  %lld", b);
 		for (int j = 1; j < ncpus; j++)
-			printf("  %lld", b - data[(i * ncpus + j) * 3 + 1]);
+			printf("  %lld", data[(i * ncpus + j) * 3 + 1] - b);
 		printf("\n");
 		b = data[(i * ncpus) * 3 + 2];
 		printf("  %lld", b);
 		for (int j = 1; j < ncpus; j++)
-			printf("  %lld", b - data[(i * ncpus + j) * 3 + 2]);
+			printf("  %lld", data[(i * ncpus + j) * 3 + 2] - b);
 		printf("\n");
 	}
 #endif
