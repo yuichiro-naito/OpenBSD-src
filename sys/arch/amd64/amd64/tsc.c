@@ -306,13 +306,13 @@ tsc_delay(int usecs)
 int tsc_is_ok = 0;
 int tsc_ncpus;
 
-#define TSC_READ(x)					\
-	static void					\
-	tsc_read_##x(struct cpu_info *ci, void *d)	\
-	{						\
-		uint64_t *array = (uint64_t *)d;	\
-		array[ci->ci_cpuid * 3 + x] = rdtsc();	\
-	}						\
+#define TSC_READ(x)						\
+	static void						\
+	tsc_read_##x(struct cpu_info *ci, void *d)		\
+	{							\
+		uint64_t *array = (uint64_t *)d;		\
+		array[ci->ci_cpuid * 3 + x] = rdtsc_lfence();	\
+	}							\
 
 TSC_READ(0)
 TSC_READ(1)
