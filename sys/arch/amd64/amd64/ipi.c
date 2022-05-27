@@ -112,7 +112,7 @@ x86_ipi_handler(void)
 	ci->ci_handled_intr_level = floor;
 }
 
-/* Variables needed for SMP rendezvous. */
+/* Variables needed for X86 rendezvous. */
 static volatile int x86_rv_ncpus;
 static void (*volatile x86_rv_setup_func)(struct cpu_info *ci, void *arg);
 static void (*volatile x86_rv_action_func)(struct cpu_info *ci, void *arg);
@@ -121,10 +121,7 @@ static void *volatile x86_rv_func_arg;
 static volatile int x86_rv_waiters[4];
 
 /*
- * Shared mutex to restrict busywaits between smp_rendezvous() and
- * smp(_targeted)_tlb_shootdown().  A deadlock occurs if both of these
- * functions trigger at once and cause multiple CPUs to busywait with
- * interrupts disabled.
+ * Mutex for x86_rendezvous().
  */
 struct mutex x86_ipi_mtx = MUTEX_INITIALIZER(IPL_HIGH);
 
@@ -193,7 +190,7 @@ x86_rendezvous_action(struct cpu_info *ci)
 	 * The release semantic ensures that all accesses performed by
 	 * the current CPU are visible when x86_rendezvous_cpus()
 	 * returns, by synchronizing with the
-	 * atomic_load_acq_int(&x86_rv_waiters[3]).
+	 * atomic_load_int(&x86_rv_waiters[3]).
 	 */
 	atomic_add_int(&x86_rv_waiters[3], 1);
 }
