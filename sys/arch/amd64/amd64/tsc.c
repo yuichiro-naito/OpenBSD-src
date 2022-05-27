@@ -301,7 +301,7 @@ tsc_delay(int usecs)
 }
 
 
-#define TEST_COUNT 1000
+#define TSC_TEST_COUNT 1000
 
 int tsc_is_ok = 0;
 int tsc_ncpus;
@@ -317,6 +317,7 @@ int tsc_ncpus;
 TSC_READ(0)
 TSC_READ(1)
 TSC_READ(2)
+#undef TSC_READ
 
 void
 tsc_comp_test(struct cpu_info *ci, void *d)
@@ -327,7 +328,7 @@ tsc_comp_test(struct cpu_info *ci, void *d)
 	u_int i, j, size;
 
 	size = tsc_ncpus * 3;
-	for (i = 0, tsc = d; i < TEST_COUNT; i++, tsc += size)
+	for (i = 0, tsc = d; i < TSC_TEST_COUNT; i++, tsc += size)
 		for (j = 0; j < tsc_ncpus; j++) {
 			if (j == cpu)
 				continue;
@@ -355,42 +356,40 @@ tsc_sync_test(void)
 		ncpus++;
 	tsc_ncpus = ncpus;
 
-	len = sizeof(uint64_t) * ncpus * 3 * TEST_COUNT;
+	len = sizeof(uint64_t) * ncpus * 3 * TSC_TEST_COUNT;
 	data = malloc(len, M_TEMP, M_WAITOK);
 	memset(data, 0, len);
 
-	for (i = 0; i < TEST_COUNT; i++)
-		x86_rendezvous(tsc_read_0,
-			       tsc_read_1,
-			       tsc_read_2,
+	for (i = 0; i < TSC_TEST_COUNT; i++)
+		x86_rendezvous(tsc_read_0, tsc_read_1, tsc_read_2,
 			       &data[ncpus * i * 3]);
 
 	tsc_is_ok = 1;
-	x86_rendezvous(x86_no_rendezvous_barrier,
-		       tsc_comp_test,
-		       x86_no_rendezvous_barrier,
-		       data);
+	x86_rendezvous(x86_no_rendezvous_barrier, tsc_comp_test,
+		       x86_no_rendezvous_barrier, data);
 #ifdef TSC_DEBUG
+#define TSC_PRINT_LONG(l)   printf("  %lld", (l))
 	printf("TSC: results\n");
-	for (i = 0; i < TEST_COUNT; i++) {
+	for (i = 0; i < TSC_TEST_COUNT; i++) {
 		int j;
 		uint64_t b;
 		b = data[(i * ncpus) * 3];
-		printf("  %lld", b);
+		TSC_PRINT_LONG(b);
 		for (j = 1; j < ncpus; j++)
-			printf("  %lld", data[(i * ncpus + j) * 3] - b);
+			TSC_PRINT_LONG(data[(i * ncpus + j) * 3] - b);
 		printf("\n");
 		b = data[(i * ncpus) * 3 + 1];
-		printf("  %lld", b);
+		TSC_PRINT_LONG(b);
 		for (j = 1; j < ncpus; j++)
-			printf("  %lld", data[(i * ncpus + j) * 3 + 1] - b);
+			TSC_PRINT_LONG(data[(i * ncpus + j) * 3 + 1] - b);
 		printf("\n");
 		b = data[(i * ncpus) * 3 + 2];
-		printf("  %lld", b);
+		TSC_PRINT_LONG(b);
 		for (j = 1; j < ncpus; j++)
-			printf("  %lld", data[(i * ncpus + j) * 3 + 2] - b);
+			TSC_PRINT_LONG(data[(i * ncpus + j) * 3 + 2] - b);
 		printf("\n");
 	}
+#undef TSC_PRINT_LONG
 #endif
 	free(data, M_TEMP, len);
 	printf("TSC: sync test has %s\n", tsc_is_ok ? "passed" : "failed");
