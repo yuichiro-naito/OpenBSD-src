@@ -411,6 +411,33 @@ getmicrotime(struct timeval *tvp)
 }
 
 /*
+ * Search the best timecounter again.
+ */
+void
+tc_research(void)
+{
+	struct timecounter *tc, *best_tc = SLIST_FIRST(&tc_list);
+
+	SLIST_FOREACH(tc, &tc_list, tc_next)
+		if ((best_tc->tc_quality < tc->tc_quality) ||
+		    (best_tc->tc_quality == tc->tc_quality &&
+		     best_tc->tc_frequency < tc->tc_frequency))
+			best_tc = tc;
+
+	/* If the current time counter is the best, just return */
+	if (timecounter == best_tc)
+		return;
+
+	/* Warm up the best timecounter. */
+	(void)best_tc->tc_get_timecount(best_tc);
+	(void)best_tc->tc_get_timecount(best_tc);
+
+	rw_enter_write(&tc_lock);
+	timecounter = best_tc;
+	rw_exit_write(&tc_lock);
+}
+
+/*
  * Initialize a new timecounter and possibly use it.
  */
 void
