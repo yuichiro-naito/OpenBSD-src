@@ -61,6 +61,7 @@
 void x86_64_ipi_nop(struct cpu_info *);
 void x86_64_ipi_halt(struct cpu_info *);
 void x86_64_ipi_wbinvd(struct cpu_info *);
+void x86_64_ipi_rendezvous(struct cpu_info *);
 
 #if NVMM > 0
 void x86_64_ipi_vmclear_vmm(struct cpu_info *);
@@ -108,6 +109,7 @@ void (*ipifunc[X86_NIPI])(struct cpu_info *) =
 	NULL,
 #endif
 	x86_64_ipi_wbinvd,
+	x86_64_ipi_rendezvous,
 };
 
 void
@@ -165,4 +167,10 @@ void
 x86_64_ipi_wbinvd(struct cpu_info *ci)
 {
 	wbinvd();
+}
+
+void
+x86_64_ipi_rendezvous(struct cpu_info *ci)
+{
+	x86_rendezvous_action(ci);
 }

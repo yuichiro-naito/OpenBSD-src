@@ -23,6 +23,7 @@
 #include <sys/systm.h>
 #include <sys/timetc.h>
 #include <sys/atomic.h>
+#include <sys/malloc.h>
 
 #include <machine/cpu.h>
 #include <machine/cpufunc.h>
@@ -216,8 +217,10 @@ calibrate_tsc_freq(void)
 		return;
 	tsc_frequency = freq;
 	tsc_timecounter.tc_frequency = freq;
+#ifndef MULTIPROCESSOR
 	if (tsc_is_invariant)
 		tsc_timecounter.tc_quality = 2000;
+#endif
 }
 
 void
@@ -236,7 +239,7 @@ cpu_recalibrate_tsc(struct timecounter *tc)
 u_int
 tsc_get_timecount(struct timecounter *tc)
 {
-	return rdtsc_lfence() + curcpu()->ci_tsc_skew;
+	return rdtsc_lfence();
 }
 
 void
@@ -260,7 +263,9 @@ tsc_timecounter_init(struct cpu_info *ci, uint64_t cpufreq)
 	/* Newer CPUs don't require recalibration */
 	if (tsc_frequency > 0) {
 		tsc_timecounter.tc_frequency = tsc_frequency;
+#ifndef MULTIPROCESSOR
 		tsc_timecounter.tc_quality = 2000;
+#endif
 	} else {
 		tsc_recalibrate = 1;
 		tsc_frequency = cpufreq;
@@ -291,81 +296,6 @@ tsc_sync_drift(int64_t drift)
 		tsc_drift_observed = drift;
 }
 
-/*
- * Called during startup of APs, by the boot processor.  Interrupts
- * are disabled on entry.
- */
-void
-tsc_read_bp(struct cpu_info *ci, uint64_t *bptscp, uint64_t *aptscp)
-{
-	uint64_t bptsc;
-
-	if (atomic_swap_ptr(&tsc_sync_cpu, ci) != NULL)
-		panic("tsc_sync_bp: 1");
-
-	/* Flag it and read our TSC. */
-	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	bptsc = (rdtsc_lfence() >> 1);
-
-	/* Wait for remote to complete, and read ours again. */
-	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
-		membar_consumer();
-	bptsc += (rdtsc_lfence() >> 1);
-
-	/* Wait for the results to come in. */
-	while (tsc_sync_cpu == ci)
-		CPU_BUSY_CYCLE();
-	if (tsc_sync_cpu != NULL)
-		panic("tsc_sync_bp: 2");
-
-	*bptscp = bptsc;
-	*aptscp = tsc_sync_val;
-}
-
-void
-tsc_sync_bp(struct cpu_info *ci)
-{
-	uint64_t bptsc, aptsc;
-
-	tsc_read_bp(ci, &bptsc, &aptsc); /* discarded - cache effects */
-	tsc_read_bp(ci, &bptsc, &aptsc);
-
-	/* Compute final value to adjust for skew. */
-	ci->ci_tsc_skew = bptsc - aptsc;
-}
-
-/*
- * Called during startup of AP, by the AP itself.  Interrupts are
- * disabled on entry.
- */
-void
-tsc_post_ap(struct cpu_info *ci)
-{
-	uint64_t tsc;
-
-	/* Wait for go-ahead from primary. */
-	while ((ci->ci_flags & CPUF_SYNCTSC) == 0)
-		membar_consumer();
-	tsc = (rdtsc_lfence() >> 1);
-
-	/* Instruct primary to read its counter. */
-	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	tsc += (rdtsc_lfence() >> 1);
-
-	/* Post result.  Ensure the whole value goes out atomically. */
-	(void)atomic_swap_64(&tsc_sync_val, tsc);
-
-	if (atomic_swap_ptr(&tsc_sync_cpu, NULL) != ci)
-		panic("tsc_sync_ap");
-}
-
-void
-tsc_sync_ap(struct cpu_info *ci)
-{
-	tsc_post_ap(ci);
-	tsc_post_ap(ci);
-}
-
 void
 tsc_delay(int usecs)
 {
@@ -376,3 +306,110 @@ tsc_delay(int usecs)
 	while (rdtsc_lfence() - start < interval)
 		CPU_BUSY_CYCLE();
 }
+
+
+#ifdef MULTIPROCESSOR
+#define TSC_TEST_COUNT 1000
+
+int tsc_is_ok = 0;
+int tsc_ncpus;
+
+#define TSC_READ(x)						\
+	static void						\
+	tsc_read_##x(struct cpu_info *ci, void *d)		\
+	{							\
+		uint64_t *array = (uint64_t *)d;		\
+		array[ci->ci_cpuid * 3 + x] = rdtsc_lfence();	\
+	}							\
+
+TSC_READ(0)
+TSC_READ(1)
+TSC_READ(2)
+#undef TSC_READ
+
+void
+tsc_comp_test(struct cpu_info *ci, void *d)
+{
+	uint64_t *tsc;
+	int64_t d1, d2;
+	u_int cpu = ci->ci_cpuid;
+	u_int i, j, size;
+
+	size = tsc_ncpus * 3;
+	for (i = 0, tsc = d; i < TSC_TEST_COUNT; i++, tsc += size)
+		for (j = 0; j < tsc_ncpus; j++) {
+			if (j == cpu)
+				continue;
+			d1 = tsc[cpu * 3 + 1] - tsc[j * 3];
+			d2 = tsc[cpu * 3 + 2] - tsc[j * 3 + 1];
+			if (d1 <= 0 || d2 <= 0) {
+				tsc_is_ok = 0;
+				return;
+			}
+		}
+}
+
+void
+tsc_sync_test(void)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+	int i, len, ncpus = 0;
+	uint64_t *data;
+
+	if (!tsc_is_invariant)
+		return;
+
+	CPU_INFO_FOREACH(cii, ci)
+		ncpus++;
+	tsc_ncpus = ncpus;
+
+	len = sizeof(uint64_t) * ncpus * 3 * TSC_TEST_COUNT;
+	data = malloc(len, M_TEMP, M_WAITOK);
+	memset(data, 0, len);
+
+	for (i = 0; i < TSC_TEST_COUNT; i++)
+		x86_rendezvous(tsc_read_0, tsc_read_1, tsc_read_2,
+			       &data[ncpus * i * 3]);
+
+	tsc_is_ok = 1;
+	x86_rendezvous(x86_no_rendezvous_barrier, tsc_comp_test,
+		       x86_no_rendezvous_barrier, data);
+#ifdef TSC_DEBUG
+#define TSC_PRINT_LONG(l)   printf("  %lld", (l))
+	printf("TSC: results\n");
+	for (i = 0; i < TSC_TEST_COUNT; i++) {
+		int j;
+		uint64_t b;
+		b = data[(i * ncpus) * 3];
+		TSC_PRINT_LONG(b);
+		for (j = 1; j < ncpus; j++)
+			TSC_PRINT_LONG(data[(i * ncpus + j) * 3] - b);
+		printf("\n");
+		b = data[(i * ncpus) * 3 + 1];
+		TSC_PRINT_LONG(b);
+		for (j = 1; j < ncpus; j++)
+			TSC_PRINT_LONG(data[(i * ncpus + j) * 3 + 1] - b);
+		printf("\n");
+		b = data[(i * ncpus) * 3 + 2];
+		TSC_PRINT_LONG(b);
+		for (j = 1; j < ncpus; j++)
+			TSC_PRINT_LONG(data[(i * ncpus + j) * 3 + 2] - b);
+		printf("\n");
+	}
+#undef TSC_PRINT_LONG
+#endif
+	free(data, M_TEMP, len);
+	printf("TSC: sync test has %s\n", tsc_is_ok ? "passed" : "failed");
+	if (tsc_is_ok) {
+		tsc_timecounter.tc_quality = 2000;
+		printf("TSC: raise quality to %d\n", tsc_timecounter.tc_quality);
+		tc_research();
+	}
+}
+#else
+void
+tsc_sync_test(void)
+{
+}
+#endif
