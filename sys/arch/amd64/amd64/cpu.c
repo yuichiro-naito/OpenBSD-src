@@ -771,10 +771,6 @@ cpu_init(struct cpu_info *ci)
 	cr4 = rcr4();
 	lcr4(cr4 & ~CR4_PGE);
 	lcr4(cr4);
-
-	/* Synchronize TSC */
-	if (cold && !CPU_IS_PRIMARY(ci))
-	      tsc_sync_ap(ci);
 #endif
 }
 
@@ -825,6 +821,7 @@ cpu_boot_secondary_processors(void)
 		ci->ci_randseed = (arc4random() & 0x7fffffff) + 1;
 		cpu_boot_secondary(ci);
 	}
+	tsc_sync_test();
 }
 
 void
@@ -861,7 +858,6 @@ cpu_start_secondary(struct cpu_info *ci)
 		 */
 		s = intr_disable();
 		wbinvd();
-		tsc_sync_bp(ci);
 		intr_restore(s);
 #ifdef TSC_DEBUG
 		printf("TSC skew=%lld\n", (long long)ci->ci_tsc_skew);
@@ -909,7 +905,6 @@ cpu_boot_secondary(struct cpu_info *ci)
 		drift = ci->ci_tsc_skew;
 		s = intr_disable();
 		wbinvd();
-		tsc_sync_bp(ci);
 		intr_restore(s);
 		drift -= ci->ci_tsc_skew;
 #ifdef TSC_DEBUG
@@ -948,7 +943,6 @@ cpu_hatch(void *v)
 	wbinvd();
 	ci->ci_flags |= CPUF_PRESENT;
 	ci->ci_tsc_skew = 0;	/* reset on resume */
-	tsc_sync_ap(ci);
 
 	lapic_enable();
 	lapic_startclock();
