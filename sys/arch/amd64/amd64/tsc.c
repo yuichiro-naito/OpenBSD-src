@@ -217,6 +217,10 @@ calibrate_tsc_freq(void)
 		return;
 	tsc_frequency = freq;
 	tsc_timecounter.tc_frequency = freq;
+#ifndef MULTIPROCESSOR
+	if (tsc_is_invariant)
+		tsc_timecounter.tc_quality = 2000;
+#endif
 }
 
 void
@@ -257,9 +261,12 @@ tsc_timecounter_init(struct cpu_info *ci, uint64_t cpufreq)
 		return;
 
 	/* Newer CPUs don't require recalibration */
-	if (tsc_frequency > 0)
+	if (tsc_frequency > 0) {
 		tsc_timecounter.tc_frequency = tsc_frequency;
-	else {
+#ifndef MULTIPROCESSOR
+		tsc_timecounter.tc_quality = 2000;
+#endif
+	} else {
 		tsc_recalibrate = 1;
 		tsc_frequency = cpufreq;
 		tsc_timecounter.tc_frequency = cpufreq;
@@ -301,6 +308,7 @@ tsc_delay(int usecs)
 }
 
 
+#ifdef MULTIPROCESSOR
 #define TSC_TEST_COUNT 1000
 
 int tsc_is_ok = 0;
@@ -399,3 +407,9 @@ tsc_sync_test(void)
 		tc_research();
 	}
 }
+#else
+void
+tsc_sync_test(void)
+{
+}
+#endif
