@@ -119,6 +119,7 @@ extern struct timekeep *timekeep;
 
 u_int64_t tc_getfrequency(void);
 u_int64_t tc_getprecision(void);
+void	tc_research(void);
 void	tc_init(struct timecounter *tc);
 void	tc_setclock(const struct timespec *ts);
 void	tc_setrealtimeclock(const struct timespec *ts);
