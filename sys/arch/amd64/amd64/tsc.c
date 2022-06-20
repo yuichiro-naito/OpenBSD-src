@@ -41,7 +41,6 @@ int		tsc_is_invariant;
 int64_t	tsc_drift_observed;
 
 volatile int64_t	tsc_sync_val;
-volatile struct cpu_info	*tsc_sync_cpu;
 
 u_int		tsc_get_timecount(struct timecounter *tc);
 void		tsc_delay(int usecs);
@@ -291,47 +290,108 @@ tsc_sync_drift(int64_t drift)
 		tsc_drift_observed = drift;
 }
 
+#define TSC_TEST_MS             3       /* Test round duration */
+
+static struct mutex tsc_lock = MUTEX_INITIALIZER(IPL_HIGH);
+static uint64_t last_tsc;
+static int num_backwards;
+static uint64_t max_backwards;
+static int test_count;
+
+uint64_t
+tsc_check_backwards(u_int timeout_ms)
+{
+	u_int i = 0;
+	uint64_t now, end, prev, lag;
+
+	now = rdtsc_lfence();
+	end = now + timeout_ms * tsc_frequency / 1000;
+
+	while (now < end) {
+		mtx_enter(&tsc_lock);
+		prev = last_tsc;
+		now = rdtsc_lfence();
+		last_tsc = now;
+		mtx_leave(&tsc_lock);
+
+		if (++i % 8 == 0)
+			CPU_BUSY_CYCLE();
+
+		if (__predict_false(now < prev)) {
+			lag = prev - now;
+			mtx_enter(&tsc_lock);
+			num_backwards++;
+			if (max_backwards < lag)
+				max_backwards = lag;
+			else
+				lag = max_backwards;
+			mtx_leave(&tsc_lock);
+		}
+	}
+	return lag;
+}
+
 /*
  * Called during startup of APs, by the boot processor.  Interrupts
  * are disabled on entry.
  */
 void
-tsc_read_bp(struct cpu_info *ci, uint64_t *bptscp, uint64_t *aptscp)
+tsc_test_sync_bp(struct cpu_info *ci)
 {
-	uint64_t bptsc;
-
-	if (atomic_swap_ptr(&tsc_sync_cpu, ci) != NULL)
-		panic("tsc_sync_bp: 1");
-
-	/* Flag it and read our TSC. */
-	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	bptsc = (rdtsc_lfence() >> 1);
-
-	/* Wait for remote to complete, and read ours again. */
+	/* Wait for AP reads its cpuid */
 	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
 		membar_consumer();
-	bptsc += (rdtsc_lfence() >> 1);
 
-	/* Wait for the results to come in. */
-	while (tsc_sync_cpu == ci)
-		CPU_BUSY_CYCLE();
-	if (tsc_sync_cpu != NULL)
-		panic("tsc_sync_bp: 2");
+	/* Set test count */
+	if (ISSET(ci->ci_feature_sefflags_ebx, SEFF0EBX_TSC_ADJUST))
+		atomic_store_int(&test_count, 3);
+	else
+		atomic_store_int(&test_count, 1);
 
-	*bptscp = bptsc;
-	*aptscp = tsc_sync_val;
+retry:
+	/* Tell AP to start checking. */
+	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
+
+	/* Wait for AP get ready. */
+	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
+		membar_consumer();
+
+	tsc_check_backwards(TSC_TEST_MS);
+
+	if (num_backwards == 0)
+		/* test successfully passed */
+		atomic_store_int(&test_count, 0);
+	else
+		atomic_dec_int(&test_count);
+
+	/* Send that test_count has been updated. */
+	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
+
+	/* Wait for remote to complete. */
+	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
+		membar_consumer();
+
+	/* reset variables */
+	last_tsc = 0;
+	num_backwards = 0;
+	max_backwards = 0;
+
+	if (atomic_load_int(&test_count) > 0)
+		goto retry;
 }
 
 void
 tsc_sync_bp(struct cpu_info *ci)
 {
-	uint64_t bptsc, aptsc;
+	// Initialize global variables.
+	last_tsc = 0;
+	num_backwards = 0;
+	max_backwards = 0;
 
-	tsc_read_bp(ci, &bptsc, &aptsc); /* discarded - cache effects */
-	tsc_read_bp(ci, &bptsc, &aptsc);
+	tsc_test_sync_bp(ci);
 
-	/* Compute final value to adjust for skew. */
-	ci->ci_tsc_skew = bptsc - aptsc;
+	printf("TSC: max_backwards = %llu / %d times\n",
+	       max_backwards, num_backwards);
 }
 
 /*
@@ -339,31 +399,56 @@ tsc_sync_bp(struct cpu_info *ci)
  * disabled on entry.
  */
 void
-tsc_post_ap(struct cpu_info *ci)
+tsc_test_sync_ap(struct cpu_info *ci)
 {
-	uint64_t tsc;
+	uint64_t cur_max_backwards, gbl_max_backwards, adjusted = 0;
+
+retry:
 
 	/* Wait for go-ahead from primary. */
 	while ((ci->ci_flags & CPUF_SYNCTSC) == 0)
 		membar_consumer();
-	tsc = (rdtsc_lfence() >> 1);
 
-	/* Instruct primary to read its counter. */
+	/* Instruct primary to start checking. */
 	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	tsc += (rdtsc_lfence() >> 1);
 
-	/* Post result.  Ensure the whole value goes out atomically. */
-	(void)atomic_swap_64(&tsc_sync_val, tsc);
+	cur_max_backwards = tsc_check_backwards(TSC_TEST_MS);
 
-	if (atomic_swap_ptr(&tsc_sync_cpu, NULL) != ci)
-		panic("tsc_sync_ap");
+	gbl_max_backwards = max_backwards;
+
+	/* Wait for BP decrement or storing test_count. */
+	while ((ci->ci_flags & CPUF_SYNCTSC) == 0)
+		membar_consumer();
+
+	/* Instruct primary to go next round. */
+	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
+
+	if (atomic_load_int(&test_count) == 0)
+		return;
+
+	if (cur_max_backwards == 0)
+		cur_max_backwards = -gbl_max_backwards;
+
+	adjusted += cur_max_backwards;
+
+	wrmsr(MSR_TSC_ADJUST, adjusted);
+	goto retry;
 }
 
 void
 tsc_sync_ap(struct cpu_info *ci)
 {
-	tsc_post_ap(ci);
-	tsc_post_ap(ci);
+	u_int32_t dummy;
+
+	/* Prepare for checking TSC_ADJUST flag */
+	if (cpuid_level >= 0x07)
+		CPUID_LEAF(0x7, 0, dummy, ci->ci_feature_sefflags_ebx,
+			   ci->ci_feature_sefflags_ecx,
+			   ci->ci_feature_sefflags_edx);
+
+	/* Tell Boot Processor that cpuid has been read */
+	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
+	tsc_test_sync_ap(ci);
 }
 
 void
