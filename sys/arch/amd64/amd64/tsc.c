@@ -296,7 +296,7 @@ static struct mutex tsc_lock = MUTEX_INITIALIZER(IPL_HIGH);
 static uint64_t last_tsc;
 static int num_backwards;
 static uint64_t max_backwards;
-static int test_count;
+volatile static int test_count;
 
 uint64_t
 tsc_check_backwards(u_int timeout_ms)
@@ -343,10 +343,7 @@ tsc_test_sync_bp(struct cpu_info *ci)
 		membar_consumer();
 
 	/* Set test count */
-	if (ISSET(ci->ci_feature_sefflags_ebx, SEFF0EBX_TSC_ADJUST))
-		atomic_store_int(&test_count, 3);
-	else
-		atomic_store_int(&test_count, 1);
+	test_count = ISSET(ci->ci_feature_sefflags_ebx, SEFF0EBX_TSC_ADJUST) ? 3 : 1;
 
 retry:
 	/* Tell AP to start checking. */
@@ -358,11 +355,8 @@ retry:
 
 	tsc_check_backwards(TSC_TEST_MS);
 
-	if (num_backwards == 0)
-		/* test successfully passed */
-		atomic_store_int(&test_count, 0);
-	else
-		atomic_dec_int(&test_count);
+	/* No need to retry testing if successfully passed */
+	test_count = (num_backwards == 0) ? 0 : test_count - 1;
 
 	/* Send that test_count has been updated. */
 	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
@@ -376,7 +370,7 @@ retry:
 	num_backwards = 0;
 	max_backwards = 0;
 
-	if (atomic_load_int(&test_count) > 0)
+	if (test_count > 0)
 		goto retry;
 }
 
@@ -423,7 +417,7 @@ retry:
 	/* Instruct primary to go next round. */
 	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
 
-	if (atomic_load_int(&test_count) == 0)
+	if (test_count == 0)
 		return;
 
 	if (cur_max_backwards == 0)
