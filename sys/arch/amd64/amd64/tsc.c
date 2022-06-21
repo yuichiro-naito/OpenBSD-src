@@ -395,8 +395,8 @@ tsc_sync_bp(struct cpu_info *ci)
 void
 tsc_test_sync_ap(struct cpu_info *ci)
 {
-	uint64_t cur_max_backwards, gbl_max_backwards, adjusted = 0;
-
+	uint64_t cur_max_backwards, gbl_max_backwards;
+	int64_t adjusted = 0;
 retry:
 
 	/* Wait for go-ahead from primary. */
@@ -425,6 +425,7 @@ retry:
 
 	adjusted += cur_max_backwards;
 
+	printf("TSC: adjust %lld\n", adjusted);
 	wrmsr(MSR_TSC_ADJUST, adjusted);
 	goto retry;
 }
