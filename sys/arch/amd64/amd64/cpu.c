@@ -894,8 +894,7 @@ cpu_boot_secondary(struct cpu_info *ci)
 	int64_t drift;
 	u_long s;
 
-	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
-	atomic_setbits_int(&ci->ci_flags, CPUF_GO);
+	atomic_setbits_int(&ci->ci_flags, CPUF_GO | CPUF_SYNCTSC);
 
 	for (i = 100000; (!(ci->ci_flags & CPUF_RUNNING)) && i>0;i--) {
 		delay(10);
