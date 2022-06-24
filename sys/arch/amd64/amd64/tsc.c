@@ -294,12 +294,12 @@ tsc_sync_drift(int64_t drift)
 
 static struct mutex tsc_lock = MUTEX_INITIALIZER(IPL_HIGH);
 static uint64_t last_tsc;
-static int num_backwards;
-static uint64_t max_backwards;
+static int num_behind;
+static uint64_t max_behind;
 volatile static int test_count;
 
 uint64_t
-tsc_check_backwards(u_int timeout_ms)
+tsc_check_behind(u_int timeout_ms)
 {
 	u_int i = 0;
 	uint64_t now, end, prev, lag;
@@ -322,11 +322,11 @@ tsc_check_backwards(u_int timeout_ms)
 		if (__predict_false(now < prev)) {
 			lag = prev - now;
 			mtx_enter(&tsc_lock);
-			num_backwards++;
-			if (max_backwards < lag)
-				max_backwards = lag;
+			num_behind++;
+			if (max_behind < lag)
+				max_behind = lag;
 			else
-				lag = max_backwards;
+				lag = max_behind;
 			mtx_leave(&tsc_lock);
 		}
 	}
@@ -338,8 +338,13 @@ tsc_check_backwards(u_int timeout_ms)
  * are disabled on entry.
  */
 void
-tsc_test_sync_bp(struct cpu_info *ci)
+tsc_sync_bp(struct cpu_info *ci)
 {
+	// Initialize global variables.
+	last_tsc = 0;
+	num_behind = 0;
+	max_behind = 0;
+
 	/* Set test count */
 	test_count = 3;
 
@@ -351,10 +356,10 @@ retry:
 	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
 		membar_consumer();
 
-	tsc_check_backwards(TSC_TEST_MS);
+	tsc_check_behind(TSC_TEST_MS);
 
 	/* No need to retry testing if successfully passed */
-	test_count = (num_backwards == 0) ? 0 : test_count - 1;
+	test_count = (num_behind == 0) ? 0 : test_count - 1;
 
 	/* Send that test_count has been updated. */
 	atomic_setbits_int(&ci->ci_flags, CPUF_SYNCTSC);
@@ -365,25 +370,14 @@ retry:
 
 	/* reset variables */
 	last_tsc = 0;
-	num_backwards = 0;
-	max_backwards = 0;
+	num_behind = 0;
+	max_behind = 0;
 
 	if (test_count > 0)
 		goto retry;
-}
 
-void
-tsc_sync_bp(struct cpu_info *ci)
-{
-	// Initialize global variables.
-	last_tsc = 0;
-	num_backwards = 0;
-	max_backwards = 0;
-
-	tsc_test_sync_bp(ci);
-
-	printf("TSC: max_backwards = %llu / %d times\n",
-	       max_backwards, num_backwards);
+	printf("TSC: max_behind = %llu / %d times\n",
+	       max_behind, num_behind);
 }
 
 /*
@@ -391,9 +385,9 @@ tsc_sync_bp(struct cpu_info *ci)
  * disabled on entry.
  */
 void
-tsc_test_sync_ap(struct cpu_info *ci)
+tsc_sync_ap(struct cpu_info *ci)
 {
-	uint64_t cur_max_backwards, gbl_max_backwards;
+	uint64_t cur_max_behind, gbl_max_behind;
 retry:
 
 	/* Wait for go-ahead from primary. */
@@ -403,9 +397,9 @@ retry:
 	/* Instruct primary to start checking. */
 	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
 
-	cur_max_backwards = tsc_check_backwards(TSC_TEST_MS);
+	cur_max_behind = tsc_check_behind(TSC_TEST_MS);
 
-	gbl_max_backwards = max_backwards;
+	gbl_max_behind = max_behind;
 
 	/* Wait for BP decrement or storing test_count. */
 	while ((ci->ci_flags & CPUF_SYNCTSC) == 0)
@@ -417,18 +411,12 @@ retry:
 	if (test_count == 0)
 		return;
 
-	if (cur_max_backwards == 0)
-		cur_max_backwards = -gbl_max_backwards;
+	if (cur_max_behind == 0)
+		cur_max_behind = -gbl_max_behind;
 
-	ci->ci_tsc_skew += cur_max_backwards;
+	ci->ci_tsc_skew += cur_max_behind;
 
 	goto retry;
-}
-
-void
-tsc_sync_ap(struct cpu_info *ci)
-{
-	tsc_test_sync_ap(ci);
 }
 
 void
