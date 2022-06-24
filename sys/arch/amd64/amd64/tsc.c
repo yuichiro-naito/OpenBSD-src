@@ -303,14 +303,16 @@ tsc_check_backwards(u_int timeout_ms)
 {
 	u_int i = 0;
 	uint64_t now, end, prev, lag;
+	int64_t cur_skew;
 
 	now = rdtsc_lfence();
 	end = now + timeout_ms * tsc_frequency / 1000;
 
+	cur_skew = curcpu()->ci_tsc_skew;
 	while (now < end) {
 		mtx_enter(&tsc_lock);
 		prev = last_tsc;
-		now = rdtsc_lfence();
+		now = rdtsc_lfence() + cur_skew;
 		last_tsc = now;
 		mtx_leave(&tsc_lock);
 
@@ -338,12 +340,8 @@ tsc_check_backwards(u_int timeout_ms)
 void
 tsc_test_sync_bp(struct cpu_info *ci)
 {
-	/* Wait for AP reads its cpuid */
-	while ((ci->ci_flags & CPUF_SYNCTSC) != 0)
-		membar_consumer();
-
 	/* Set test count */
-	test_count = ISSET(ci->ci_feature_sefflags_ebx, SEFF0EBX_TSC_ADJUST) ? 3 : 1;
+	test_count = 3;
 
 retry:
 	/* Tell AP to start checking. */
@@ -396,7 +394,6 @@ void
 tsc_test_sync_ap(struct cpu_info *ci)
 {
 	uint64_t cur_max_backwards, gbl_max_backwards;
-	int64_t adjusted = 0;
 retry:
 
 	/* Wait for go-ahead from primary. */
@@ -423,26 +420,14 @@ retry:
 	if (cur_max_backwards == 0)
 		cur_max_backwards = -gbl_max_backwards;
 
-	adjusted += cur_max_backwards;
+	ci->ci_tsc_skew += cur_max_backwards;
 
-	printf("TSC: adjust %lld\n", adjusted);
-	wrmsr(MSR_TSC_ADJUST, adjusted);
 	goto retry;
 }
 
 void
 tsc_sync_ap(struct cpu_info *ci)
 {
-	u_int32_t dummy;
-
-	/* Prepare for checking TSC_ADJUST flag */
-	if (cpuid_level >= 0x07)
-		CPUID_LEAF(0x7, 0, dummy, ci->ci_feature_sefflags_ebx,
-			   ci->ci_feature_sefflags_ecx,
-			   ci->ci_feature_sefflags_edx);
-
-	/* Tell Boot Processor that cpuid has been read */
-	atomic_clearbits_int(&ci->ci_flags, CPUF_SYNCTSC);
 	tsc_test_sync_ap(ci);
 }
 

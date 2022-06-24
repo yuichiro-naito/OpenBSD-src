@@ -838,7 +838,6 @@ cpu_start_secondary(struct cpu_info *ci)
 	pmap_kenter_pa(MP_TRAMPOLINE, MP_TRAMPOLINE, PROT_READ | PROT_EXEC);
 	pmap_kenter_pa(MP_TRAMP_DATA, MP_TRAMP_DATA, PROT_READ | PROT_WRITE);
 
-	ci->ci_flags |= CPUF_SYNCTSC;
 	CPU_STARTUP(ci);
 
 	/*
@@ -894,7 +893,7 @@ cpu_boot_secondary(struct cpu_info *ci)
 	int64_t drift;
 	u_long s;
 
-	atomic_setbits_int(&ci->ci_flags, CPUF_GO | CPUF_SYNCTSC);
+	atomic_setbits_int(&ci->ci_flags, CPUF_GO);
 
 	for (i = 100000; (!(ci->ci_flags & CPUF_RUNNING)) && i>0;i--) {
 		delay(10);
