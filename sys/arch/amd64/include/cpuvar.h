@@ -97,8 +97,7 @@ void identifycpu(struct cpu_info *);
 void cpu_init(struct cpu_info *);
 void cpu_init_first(void);
 
-void tsc_sync_drift(int64_t);
-void tsc_sync_bp(struct cpu_info *);
-void tsc_sync_ap(struct cpu_info *);
+void tsc_test_sync_bp(struct cpu_info *);
+void tsc_test_sync_ap(struct cpu_info *);
 
 #endif

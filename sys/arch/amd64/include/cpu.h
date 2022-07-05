@@ -212,8 +212,6 @@ struct cpu_info {
 	paddr_t		ci_vmxon_region_pa;
 	struct vmxon_region *ci_vmxon_region;
 
-	int64_t		ci_tsc_skew;		/* counter skew vs cpu0 */
-
 	char		ci_panicbuf[512];
 
 	paddr_t		ci_vmcs_pa;
@@ -233,7 +231,6 @@ struct cpu_info {
 #define CPUF_INVAR_TSC	0x0100		/* CPU has invariant TSC */
 #define CPUF_USERXSTATE	0x0200		/* CPU has curproc's xsave state */
 
-#define CPUF_SYNCTSC	0x0800		/* Synchronize TSC */
 #define CPUF_PRESENT	0x1000		/* CPU is present */
 #define CPUF_RUNNING	0x2000		/* CPU is running */
 #define CPUF_PAUSE	0x4000		/* CPU is paused in DDB */

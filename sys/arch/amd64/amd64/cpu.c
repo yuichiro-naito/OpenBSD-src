@@ -772,9 +772,9 @@ cpu_init(struct cpu_info *ci)
 	lcr4(cr4 & ~CR4_PGE);
 	lcr4(cr4);
 
-	/* Synchronize TSC */
+	/* Check if TSC is synchronized. */
 	if (cold && !CPU_IS_PRIMARY(ci))
-	      tsc_sync_ap(ci);
+	      tsc_test_sync_ap(ci);
 #endif
 }
 
@@ -854,18 +854,14 @@ cpu_start_secondary(struct cpu_info *ci)
 #endif
 	} else {
 		/*
-		 * Synchronize time stamp counters. Invalidate cache and
-		 * synchronize twice (in tsc_sync_bp) to minimize possible
-		 * cache effects. Disable interrupts to try and rule out any
-		 * external interference.
+		 * Test if TSCs are synchronized.  Invalidate cache to
+		 * minimize possible cache effects.  Disable interrupts to
+		 * rule out external interference.
 		 */
 		s = intr_disable();
 		wbinvd();
-		tsc_sync_bp(ci);
+		tsc_test_sync_bp(ci);
 		intr_restore(s);
-#ifdef TSC_DEBUG
-		printf("TSC skew=%lld\n", (long long)ci->ci_tsc_skew);
-#endif
 	}
 
 	if ((ci->ci_flags & CPUF_IDENTIFIED) == 0) {
@@ -890,7 +886,6 @@ void
 cpu_boot_secondary(struct cpu_info *ci)
 {
 	int i;
-	int64_t drift;
 	u_long s;
 
 	atomic_setbits_int(&ci->ci_flags, CPUF_GO);
@@ -905,18 +900,11 @@ cpu_boot_secondary(struct cpu_info *ci)
 		db_enter();
 #endif
 	} else if (cold) {
-		/* Synchronize TSC again, check for drift. */
-		drift = ci->ci_tsc_skew;
+		/* Test if TSCs are synchronized again. */
 		s = intr_disable();
 		wbinvd();
-		tsc_sync_bp(ci);
+		tsc_test_sync_bp(ci);
 		intr_restore(s);
-		drift -= ci->ci_tsc_skew;
-#ifdef TSC_DEBUG
-		printf("TSC skew=%lld drift=%lld\n",
-		    (long long)ci->ci_tsc_skew, (long long)drift);
-#endif
-		tsc_sync_drift(drift);
 	}
 }
 
@@ -942,13 +930,12 @@ cpu_hatch(void *v)
 #endif
 
 	/*
-	 * Synchronize the TSC for the first time. Note that interrupts are
-	 * off at this point.
+	 * Test if our TSC is synchronized for the first time.
+	 * Note that interrupts are off at this point.
 	 */
 	wbinvd();
 	ci->ci_flags |= CPUF_PRESENT;
-	ci->ci_tsc_skew = 0;	/* reset on resume */
-	tsc_sync_ap(ci);
+	tsc_test_sync_ap(ci);
 
 	lapic_enable();
 	lapic_startclock();
