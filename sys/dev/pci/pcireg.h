@@ -657,6 +657,8 @@ typedef u_int8_t pci_revision_t;
 #define PCI_MSIX_VC(i)		((i) * 16 + 12)
 #define  PCI_MSIX_VC_MASK	0x00000001
 
+#define PCIR_MSIX_CTRL		0x2
+
 /*
  * Interrupt Configuration Register; contains interrupt pin and line.
  */

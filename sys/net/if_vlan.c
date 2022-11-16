@@ -868,10 +868,11 @@ vlan_setlladdr(struct vlan_softc *sc, struct ifreq *ifr)
 int
 vlan_set_vnetid(struct vlan_softc *sc, uint16_t tag)
 {
-	struct ifnet *ifp = &sc->sc_if;
+	struct ifnet *ifp0, *ifp = &sc->sc_if;
 	struct vlan_list *tagh, *list;
 	u_char link = ifp->if_link_state;
 	uint64_t baud = ifp->if_baudrate;
+	uint16_t otag;
 	int error;
 
 	tagh = sc->sc_type == ETHERTYPE_QINQ ? svlan_tagh : vlan_tagh;
@@ -887,6 +888,7 @@ vlan_set_vnetid(struct vlan_softc *sc, uint16_t tag)
 	if (error != 0)
 		goto unlock;
 
+	otag = sc->sc_tag;
 	if (ISSET(ifp->if_flags, IFF_RUNNING)) {
 		list = &tagh[TAG_HASH(sc->sc_tag)];
 		SMR_SLIST_REMOVE_LOCKED(list, sc, vlan_softc, sc_list);
@@ -897,6 +899,10 @@ vlan_set_vnetid(struct vlan_softc *sc, uint16_t tag)
 		SMR_SLIST_INSERT_HEAD_LOCKED(list, sc, sc_list);
 	} else
 		sc->sc_tag = tag;
+
+	ifp0 = if_get(sc->sc_ifidx0);
+	if (ifp0 != NULL && ifp0->if_configure_vlan != NULL)
+		(*ifp0->if_configure_vlan)(ifp0, tag, otag);
 
 unlock:
 	rw_exit(&vlan_tagh_lk);
@@ -911,7 +917,7 @@ int
 vlan_set_parent(struct vlan_softc *sc, const char *parent)
 {
 	struct ifnet *ifp = &sc->sc_if;
-	struct ifnet *ifp0;
+	struct ifnet *ifp0, *p;
 	int error = 0;
 
 	ifp0 = if_unit(parent);
@@ -941,6 +947,15 @@ vlan_set_parent(struct vlan_softc *sc, const char *parent)
 		ifsetlro(ifp0, 0);
 
 	/* commit */
+	if (sc->sc_tag > 0) {
+		p = if_get(sc->sc_ifidx0);
+		if (p != NULL && p->if_configure_vlan != NULL)
+			(*p->if_configure_vlan)(p, 0, sc->sc_tag);
+
+		if (ifp0->if_configure_vlan != NULL)
+			(*ifp0->if_configure_vlan)(ifp0, sc->sc_tag, 0);
+	}
+
 	sc->sc_ifidx0 = ifp0->if_index;
 	if (!ISSET(sc->sc_flags, IFVF_LLADDR))
 		if_setlladdr(ifp, LLADDR(ifp0->if_sadl));
@@ -953,12 +968,17 @@ put:
 int
 vlan_del_parent(struct vlan_softc *sc)
 {
-	struct ifnet *ifp = &sc->sc_if;
+	struct ifnet *ifp0, *ifp = &sc->sc_if;
 
 	if (ISSET(ifp->if_flags, IFF_RUNNING))
 		return (EBUSY);
 
 	/* commit */
+	if (sc->sc_tag > 0) {
+		ifp0 = if_get(sc->sc_ifidx0);
+		if (ifp0 != NULL && ifp0->if_configure_vlan != NULL)
+			(*ifp0->if_configure_vlan)(ifp0, 0, sc->sc_tag);
+	}
 	sc->sc_ifidx0 = 0;
 	if (!ISSET(sc->sc_flags, IFVF_LLADDR))
 		if_setlladdr(ifp, etheranyaddr);
