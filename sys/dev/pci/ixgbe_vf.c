@@ -77,8 +77,6 @@ ixgbe_dummy_void_handler_vf(struct ixgbe_hw *hw)
  **/
 int32_t ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 {
-	uint16_t i;
-
 	/* MAC */
 	hw->mac.ops.init_hw = ixgbe_init_hw_vf;
 	hw->mac.ops.reset_hw = ixgbe_reset_hw_vf;
@@ -119,8 +117,7 @@ int32_t ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 	hw->mac.max_tx_queues = 1;
 	hw->mac.max_rx_queues = 1;
 
-	for (i = 0; i < 64; i++)
-		hw->mbx.ops[i].init_params = ixgbe_init_mbx_params_vf;
+	hw->mbx.ops.init_params = ixgbe_init_mbx_params_vf;
 
 	return IXGBE_SUCCESS;
 }
@@ -233,7 +230,7 @@ int32_t ixgbe_reset_hw_vf(struct ixgbe_hw *hw)
 	msec_delay(50);
 
 	/* we cannot reset while the RSTI / RSTD bits are asserted */
-	while (!mbx->ops[0].check_for_rst(hw, 0) && timeout) {
+	while (!mbx->ops.check_for_rst(hw, 0) && timeout) {
 		timeout--;
 		usec_delay(5);
 	}
@@ -603,7 +600,7 @@ int32_t ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	uint32_t links_reg;
 
 	/* If we were hit with a reset drop the link */
-	if (!mbx->ops[0].check_for_rst(hw, 0) || !mbx->timeout)
+	if (!mbx->ops.check_for_rst(hw, 0) || !mbx->timeout)
 		mac->get_link_status = TRUE;
 
 	if (!mac->get_link_status)
