@@ -4479,8 +4479,8 @@ int32_t ixgbe_read_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size, uint16
 	if (size > mbx->size)
 		size = mbx->size;
 
-	if (mbx->ops[mbx_id].read)
-	    return mbx->ops[mbx_id].read(hw, msg, size, mbx_id);
+	if (mbx->ops.read)
+	    return mbx->ops.read(hw, msg, size, mbx_id);
 
 	return IXGBE_ERR_CONFIG;
 }
@@ -4502,7 +4502,7 @@ int32_t ixgbe_poll_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size,
 
 	DEBUGFUNC("ixgbe_poll_mbx");
 
-	if (!mbx->ops[mbx_id].read || !mbx->ops[mbx_id].check_for_msg ||
+	if (!mbx->ops.read || !mbx->ops.check_for_msg ||
 	    !mbx->timeout)
 		return IXGBE_ERR_CONFIG;
 
@@ -4513,7 +4513,7 @@ int32_t ixgbe_poll_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size,
 	ret_val = ixgbe_poll_for_msg(hw, mbx_id);
 	/* if ack received read message, otherwise we timed out */
 	if (!ret_val)
-		return mbx->ops[mbx_id].read(hw, msg, size, mbx_id);
+		return mbx->ops.read(hw, msg, size, mbx_id);
 
 	return ret_val;
 }
@@ -4538,8 +4538,8 @@ int32_t ixgbe_write_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size, uint1
 	 * exit if either we can't write, release
 	 * or there is no timeout defined
 	 */
-	if (!mbx->ops[mbx_id].write || !mbx->ops[mbx_id].check_for_ack ||
-	    !mbx->ops[mbx_id].release || !mbx->timeout)
+	if (!mbx->ops.write || !mbx->ops.check_for_ack ||
+	    !mbx->ops.release || !mbx->timeout)
 		return IXGBE_ERR_CONFIG;
 
 	if (size > mbx->size) {
@@ -4547,7 +4547,7 @@ int32_t ixgbe_write_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size, uint1
 		ERROR_REPORT2(IXGBE_ERROR_ARGUMENT,
 			     "Invalid mailbox message size %u", size);
 	} else {
-		ret_val = mbx->ops[mbx_id].write(hw, msg, size, mbx_id);
+		ret_val = mbx->ops.write(hw, msg, size, mbx_id);
 	}
 
 	return ret_val;
@@ -4567,8 +4567,8 @@ int32_t ixgbe_check_for_msg(struct ixgbe_hw *hw, uint16_t mbx_id)
 
 	DEBUGFUNC("ixgbe_check_for_msg");
 
-	if (mbx->ops[mbx_id].check_for_msg)
-		ret_val = mbx->ops[mbx_id].check_for_msg(hw, mbx_id);
+	if (mbx->ops.check_for_msg)
+		ret_val = mbx->ops.check_for_msg(hw, mbx_id);
 
 	return ret_val;
 }
@@ -4587,8 +4587,8 @@ int32_t ixgbe_check_for_ack(struct ixgbe_hw *hw, uint16_t mbx_id)
 
 	DEBUGFUNC("ixgbe_check_for_ack");
 
-	if (mbx->ops[mbx_id].check_for_ack)
-		ret_val = mbx->ops[mbx_id].check_for_ack(hw, mbx_id);
+	if (mbx->ops.check_for_ack)
+		ret_val = mbx->ops.check_for_ack(hw, mbx_id);
 
 	return ret_val;
 }
@@ -4607,8 +4607,8 @@ int32_t ixgbe_check_for_rst(struct ixgbe_hw *hw, uint16_t mbx_id)
 
 	DEBUGFUNC("ixgbe_check_for_rst");
 
-	if (mbx->ops[mbx_id].check_for_rst)
-		ret_val = mbx->ops[mbx_id].check_for_rst(hw, mbx_id);
+	if (mbx->ops.check_for_rst)
+		ret_val = mbx->ops.check_for_rst(hw, mbx_id);
 
 	return ret_val;
 }
@@ -4627,10 +4627,10 @@ int32_t ixgbe_poll_for_msg(struct ixgbe_hw *hw, uint16_t mbx_id)
 
 	DEBUGFUNC("ixgbe_poll_for_msg");
 
-	if (!countdown || !mbx->ops[mbx_id].check_for_msg)
+	if (!countdown || !mbx->ops.check_for_msg)
 		return IXGBE_ERR_CONFIG;
 
-	while (countdown && mbx->ops[mbx_id].check_for_msg(hw, mbx_id)) {
+	while (countdown && mbx->ops.check_for_msg(hw, mbx_id)) {
 		countdown--;
 		if (!countdown)
 			break;
@@ -4660,10 +4660,10 @@ int32_t ixgbe_poll_for_ack(struct ixgbe_hw *hw, uint16_t mbx_id)
 
 	DEBUGFUNC("ixgbe_poll_for_ack");
 
-	if (!countdown || !mbx->ops[mbx_id].check_for_ack)
+	if (!countdown || !mbx->ops.check_for_ack)
 		return IXGBE_ERR_CONFIG;
 
-	while (countdown && mbx->ops[mbx_id].check_for_ack(hw, mbx_id)) {
+	while (countdown && mbx->ops.check_for_ack(hw, mbx_id)) {
 		countdown--;
 		if (!countdown)
 			break;
@@ -4863,14 +4863,14 @@ int32_t ixgbe_read_posted_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size,
 
 	DEBUGFUNC("ixgbe_read_posted_mbx");
 
-	if (!mbx->ops[mbx_id].read)
+	if (!mbx->ops.read)
 		goto out;
 
 	ret_val = ixgbe_poll_for_msg(hw, mbx_id);
 
 	/* if ack received read message, otherwise we timed out */
 	if (!ret_val)
-		ret_val = mbx->ops[mbx_id].read(hw, msg, size, mbx_id);
+		ret_val = mbx->ops.read(hw, msg, size, mbx_id);
 out:
 	return ret_val;
 }
@@ -4894,11 +4894,11 @@ int32_t ixgbe_write_posted_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size
 	DEBUGFUNC("ixgbe_write_posted_mbx");
 
 	/* exit if either we can't write or there isn't a defined timeout */
-	if (!mbx->ops[mbx_id].write || !mbx->timeout)
+	if (!mbx->ops.write || !mbx->timeout)
 		goto out;
 
 	/* send msg */
-	ret_val = mbx->ops[mbx_id].write(hw, msg, size, mbx_id);
+	ret_val = mbx->ops.write(hw, msg, size, mbx_id);
 
 	/* if msg sent wait until we receive an ack */
 	if (!ret_val)
@@ -4916,12 +4916,9 @@ out:
 void ixgbe_init_mbx_ops_generic(struct ixgbe_hw *hw)
 {
 	struct ixgbe_mbx_info *mbx = &hw->mbx;
-	int i;
 
-	for (i = 0; i < 64; i++) {
-		mbx->ops[i].read_posted = ixgbe_read_posted_mbx;
-		mbx->ops[i].write_posted = ixgbe_write_posted_mbx;
-	}
+	mbx->ops.read_posted = ixgbe_read_posted_mbx;
+	mbx->ops.write_posted = ixgbe_write_posted_mbx;
 }
 
 int32_t ixgbe_check_for_bit_pf(struct ixgbe_hw *hw, uint32_t mask, int32_t index)
@@ -5153,7 +5150,7 @@ int32_t ixgbe_write_mbx_pf(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size,
 	hw->mbx.stats.msgs_tx++;
 
 out:
-	hw->mbx.ops[vf_id].release(hw, vf_id);
+	hw->mbx.ops.release(hw, vf_id);
 
 	return ret_val;
 }
@@ -5348,7 +5345,7 @@ static int32_t ixgbe_write_mbx_vf(struct ixgbe_hw *hw, uint32_t *msg,
 	ixgbe_poll_for_ack(hw, mbx_id);
 
 out:
-	hw->mbx.ops[mbx_id].release(hw, mbx_id);
+	hw->mbx.ops.release(hw, mbx_id);
 
 	return ret_val;
 }
@@ -5444,14 +5441,13 @@ void ixgbe_init_mbx_params_vf(struct ixgbe_hw *hw)
 
 	mbx->size = IXGBE_VFMAILBOX_SIZE;
 
-	/* VF has only one mailbox connection, no need for more IDs */
-	mbx->ops[0].release = ixgbe_release_mbx_lock_dummy;
-	mbx->ops[0].read = ixgbe_read_mbx_vf_legacy;
-	mbx->ops[0].write = ixgbe_write_mbx_vf_legacy;
-	mbx->ops[0].check_for_msg = ixgbe_check_for_msg_vf;
-	mbx->ops[0].check_for_ack = ixgbe_check_for_ack_vf;
-	mbx->ops[0].check_for_rst = ixgbe_check_for_rst_vf;
-	mbx->ops[0].clear = NULL;
+	mbx->ops.release = ixgbe_release_mbx_lock_dummy;
+	mbx->ops.read = ixgbe_read_mbx_vf_legacy;
+	mbx->ops.write = ixgbe_write_mbx_vf_legacy;
+	mbx->ops.check_for_msg = ixgbe_check_for_msg_vf;
+	mbx->ops.check_for_ack = ixgbe_check_for_ack_vf;
+	mbx->ops.check_for_rst = ixgbe_check_for_rst_vf;
+	mbx->ops.clear = NULL;
 
 	mbx->stats.msgs_tx = 0;
 	mbx->stats.msgs_rx = 0;
@@ -5475,14 +5471,13 @@ void ixgbe_upgrade_mbx_params_vf(struct ixgbe_hw *hw)
 
 	mbx->size = IXGBE_VFMAILBOX_SIZE;
 
-	/* VF has only one mailbox connection, no need for more IDs */
-	mbx->ops[0].release = ixgbe_release_mbx_lock_vf;
-	mbx->ops[0].read = ixgbe_read_mbx_vf;
-	mbx->ops[0].write = ixgbe_write_mbx_vf;
-	mbx->ops[0].check_for_msg = ixgbe_check_for_msg_vf;
-	mbx->ops[0].check_for_ack = ixgbe_check_for_ack_vf;
-	mbx->ops[0].check_for_rst = ixgbe_check_for_rst_vf;
-	mbx->ops[0].clear = NULL;
+	mbx->ops.release = ixgbe_release_mbx_lock_vf;
+	mbx->ops.read = ixgbe_read_mbx_vf;
+	mbx->ops.write = ixgbe_write_mbx_vf;
+	mbx->ops.check_for_msg = ixgbe_check_for_msg_vf;
+	mbx->ops.check_for_ack = ixgbe_check_for_ack_vf;
+	mbx->ops.check_for_rst = ixgbe_check_for_rst_vf;
+	mbx->ops.clear = NULL;
 
 	mbx->stats.msgs_tx = 0;
 	mbx->stats.msgs_rx = 0;
@@ -5554,27 +5549,6 @@ static int32_t ixgbe_clear_mbx_pf(struct ixgbe_hw *hw, uint16_t vf_id)
 }
 
 /**
- * ixgbe_init_mbx_params_pf_id - set initial values for pf mailbox
- * @hw: pointer to the HW structure
- * @vf_id: the VF index
- *
- * Initializes single set of the hw->mbx struct to correct values for pf mailbox
- * Set of legacy functions is being used here
- */
-void ixgbe_init_mbx_params_pf_id(struct ixgbe_hw *hw, uint16_t vf_id)
-{
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
-
-	mbx->ops[vf_id].release = ixgbe_release_mbx_lock_dummy;
-	mbx->ops[vf_id].read = ixgbe_read_mbx_pf_legacy;
-	mbx->ops[vf_id].write = ixgbe_write_mbx_pf_legacy;
-	mbx->ops[vf_id].check_for_msg = ixgbe_check_for_msg_pf;
-	mbx->ops[vf_id].check_for_ack = ixgbe_check_for_ack_pf;
-	mbx->ops[vf_id].check_for_rst = ixgbe_check_for_rst_pf;
-	mbx->ops[vf_id].clear = ixgbe_clear_mbx_pf;
-}
-
-/**
  *  ixgbe_init_mbx_params_pf - set initial values for pf mailbox
  *  @hw: pointer to the HW structure
  *
@@ -5582,7 +5556,6 @@ void ixgbe_init_mbx_params_pf_id(struct ixgbe_hw *hw, uint16_t vf_id)
  */
 void ixgbe_init_mbx_params_pf(struct ixgbe_hw *hw)
 {
-	int16_t i;
 	struct ixgbe_mbx_info *mbx = &hw->mbx;
 
 	if (hw->mac.type != ixgbe_mac_82599EB &&
@@ -5604,15 +5577,14 @@ void ixgbe_init_mbx_params_pf(struct ixgbe_hw *hw)
 	mbx->stats.acks = 0;
 	mbx->stats.rsts = 0;
 
-	/* No matter of VF number, we initialize params for all 64 VFs. */
-	/* TODO: 1. Add a define for max VF and refactor SHARED to get rid
-	 * of magic number for that (63 or 64 depending on use case.)
-	 * 2. rewrite the code to dynamically allocate mbx->ops[vf_id] for
-	 * certain number of VFs instead of default maximum value of 64 (0..63)
-	 */
-	for (i = 0; i < 64; i++)
-		ixgbe_init_mbx_params_pf_id(hw, i);
-
+	/* Initialize mailbox operations */
+	mbx->ops.release = ixgbe_release_mbx_lock_dummy;
+	mbx->ops.read = ixgbe_read_mbx_pf_legacy;
+	mbx->ops.write = ixgbe_write_mbx_pf_legacy;
+	mbx->ops.check_for_msg = ixgbe_check_for_msg_pf;
+	mbx->ops.check_for_ack = ixgbe_check_for_ack_pf;
+	mbx->ops.check_for_rst = ixgbe_check_for_rst_pf;
+	mbx->ops.clear = ixgbe_clear_mbx_pf;
 }
 
 /**
@@ -5639,13 +5611,13 @@ void ixgbe_upgrade_mbx_params_pf(struct ixgbe_hw *hw, uint16_t vf_id)
 	mbx->usec_delay = IXGBE_VF_MBX_INIT_DELAY;
 	mbx->size = IXGBE_VFMAILBOX_SIZE;
 
-	mbx->ops[vf_id].release = ixgbe_release_mbx_lock_pf;
-	mbx->ops[vf_id].read = ixgbe_read_mbx_pf;
-	mbx->ops[vf_id].write = ixgbe_write_mbx_pf;
-	mbx->ops[vf_id].check_for_msg = ixgbe_check_for_msg_pf;
-	mbx->ops[vf_id].check_for_ack = ixgbe_check_for_ack_pf;
-	mbx->ops[vf_id].check_for_rst = ixgbe_check_for_rst_pf;
-	mbx->ops[vf_id].clear = ixgbe_clear_mbx_pf;
+	mbx->ops.release = ixgbe_release_mbx_lock_pf;
+	mbx->ops.read = ixgbe_read_mbx_pf;
+	mbx->ops.write = ixgbe_write_mbx_pf;
+	mbx->ops.check_for_msg = ixgbe_check_for_msg_pf;
+	mbx->ops.check_for_ack = ixgbe_check_for_ack_pf;
+	mbx->ops.check_for_rst = ixgbe_check_for_rst_pf;
+	mbx->ops.clear = ixgbe_clear_mbx_pf;
 
 	mbx->stats.msgs_tx = 0;
 	mbx->stats.msgs_rx = 0;
