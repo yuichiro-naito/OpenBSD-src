@@ -4295,12 +4295,7 @@ struct ixgbe_mbx_stats {
 };
 
 struct ixgbe_mbx_info {
-	/*
-	 * PF: One set of operations for each VF to handle various API versions
-	 *     at the same time
-	 * VF: Only the very first (0) set should be used
-	 */
-	struct ixgbe_mbx_operations ops[64];
+	struct ixgbe_mbx_operations ops;
 	struct ixgbe_mbx_stats stats;
 	uint32_t timeout;
 	uint32_t usec_delay;
