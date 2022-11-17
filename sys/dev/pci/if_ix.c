@@ -3955,12 +3955,12 @@ ix_kstats_read(struct kstat *ks)
 
 	/* handle the exceptions */
 	if (sc->hw.mac.type == ixgbe_mac_82598EB) {
-		kstat_kv_u64(&kvs[ix_counter_lxonrxc]) +=
+		kstat_kv_u64(&kvs[ix_counter_lxonrxc]) += 
 		    IXGBE_READ_REG(hw, IXGBE_LXONRXC);
 		kstat_kv_u64(&kvs[ix_counter_lxoffrxc]) +=
 		    IXGBE_READ_REG(hw, IXGBE_LXOFFRXC);
 	} else {
-		kstat_kv_u64(&kvs[ix_counter_lxonrxc]) +=
+		kstat_kv_u64(&kvs[ix_counter_lxonrxc]) += 
 		    IXGBE_READ_REG(hw, IXGBE_LXONRXCNT);
 		kstat_kv_u64(&kvs[ix_counter_lxoffrxc]) +=
 		    IXGBE_READ_REG(hw, IXGBE_LXOFFRXCNT);
