@@ -3255,6 +3255,7 @@ ixgbe_rxeof(struct rx_ring *rxr)
 			mp->m_next = nxbuf->buf;
 		} else { /* Sending this frame? */
 			ixgbe_rx_checksum(staterr, sendmp);
+
 			rxr->packets++;
 			rxr->bytes += sendmp->m_pkthdr.len;
 			if (hashtype != IXGBE_RXDADV_RSSTYPE_NONE) {
