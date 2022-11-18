@@ -686,7 +686,7 @@ int32_t ixgbe_get_mac_addr_generic(struct ixgbe_hw *hw, uint8_t *mac_addr)
 
 #ifdef __sparc64__
 	struct ixgbe_osdep *os = hw->back;
-
+ 
 	if (OF_getprop(PCITAG_NODE(os->os_pa.pa_tag), "local-mac-address",
 	    mac_addr, ETHER_ADDR_LEN) == ETHER_ADDR_LEN)
 		return IXGBE_SUCCESS;
