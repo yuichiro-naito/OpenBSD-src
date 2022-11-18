@@ -711,7 +711,7 @@ ixgbe_watchdog(struct ifnet * ifp)
 	for (i = 0; i < sc->num_queues; i++, txr++) {
 		printf("%s: Queue(%d) tdh = %d, hw tdt = %d\n", ifp->if_xname, i,
 		    IXGBE_READ_REG(hw, IXGBE_TDH(i)),
-		    IXGBE_READ_REG(hw, txr->tail));
+		    IXGBE_READ_REG(hw, sc->tx_rings[i].tail));
 		printf("%s: TX(%d) Next TX to Clean = %d\n", ifp->if_xname,
 		    i, txr->next_to_clean);
 	}
@@ -831,7 +831,7 @@ ixgbe_init(void *arg)
 				msec_delay(1);
 		}
 		IXGBE_WRITE_FLUSH(&sc->hw);
-		IXGBE_WRITE_REG(&sc->hw, rxr->tail, rxr->last_desc_filled);
+		IXGBE_WRITE_REG(&sc->hw, rxr[i].tail, rxr->last_desc_filled);
 	}
 
 	/* Set up VLAN support and filter */
@@ -2956,7 +2956,7 @@ ixgbe_initialize_receive_units(struct ix_softc *sc)
 		IXGBE_WRITE_REG(hw, IXGBE_SRRCTL(i), srrctl);
 
 		/* Capture Rx Tail index */
-		rxr->tail = IXGBE_RDT(rxr->me);
+		rxr->tail = IXGBE_RDT(i);
 
 		if (ISSET(ifp->if_xflags, IFXF_LRO)) {
 			rdrxctl = IXGBE_READ_REG(&sc->hw, IXGBE_RSCCTL(i));
