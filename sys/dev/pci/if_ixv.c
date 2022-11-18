@@ -32,7 +32,6 @@
   POSSIBILITY OF SUCH DAMAGE.
 
 ******************************************************************************/
-/*$FreeBSD$*/
 
 #include <dev/pci/if_ix.h>
 #include <dev/pci/ixgbe_type.h>
