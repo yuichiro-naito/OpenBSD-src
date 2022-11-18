@@ -3257,6 +3257,7 @@ ixgbe_rxeof(struct rx_ring *rxr)
 			uint16_t pkts;
 
 			ixgbe_rx_checksum(staterr, sendmp);
+
 			rxr->packets++;
 			rxr->bytes += sendmp->m_pkthdr.len;
 			if (hashtype != IXGBE_RXDADV_RSSTYPE_NONE) {
