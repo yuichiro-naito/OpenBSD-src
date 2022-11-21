@@ -393,7 +393,7 @@ int32_t ixgbe_update_mc_addr_list_vf(struct ixgbe_hw *hw, uint8_t *mc_addr_list,
 
 	DEBUGOUT1("MC Addr Count = %d\n", mc_addr_count);
 
-	cnt = (mc_addr_count > 30) ? 30 : mc_addr_count;
+	cnt = (mc_addr_count > IXGBE_MAX_MULTICAST_ADDRESSES_VF) ? IXGBE_MAX_MULTICAST_ADDRESSES_VF : mc_addr_count;
 	msgbuf[0] = IXGBE_VF_SET_MULTICAST;
 	msgbuf[0] |= cnt << IXGBE_VT_MSGINFO_SHIFT;
 
