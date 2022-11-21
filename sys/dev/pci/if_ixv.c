@@ -241,7 +241,7 @@ ixv_attach(struct device *parent, struct device *self, void *aux)
 
 	/* Allocate multicast array memory */
 	sc->mta = mallocarray(IXGBE_ETH_LENGTH_OF_ADDRESS,
-	    MAX_NUM_MULTICAST_ADDRESSES, M_DEVBUF, M_NOWAIT);
+	    IXGBE_MAX_MULTICAST_ADDRESSES_VF, M_DEVBUF, M_NOWAIT);
 	if (sc->mta == NULL) {
 		printf("Can not allocate multicast setup array\n");
 		return;
@@ -365,7 +365,7 @@ err_late:
 err_out:
 	ixgbe_free_pci_resources(sc);
 	free(sc->mta, M_DEVBUF, IXGBE_ETH_LENGTH_OF_ADDRESS *
-	    MAX_NUM_MULTICAST_ADDRESSES);
+	     IXGBE_MAX_MULTICAST_ADDRESSES_VF);
 } /* ixv_attach */
 
 /************************************************************************
@@ -390,7 +390,7 @@ ixv_detach(struct device *self, int flags)
 	if_detach(ifp);
 
 	free(sc->mta, M_DEVBUF, IXGBE_ETH_LENGTH_OF_ADDRESS *
-	    MAX_NUM_MULTICAST_ADDRESSES);
+	     IXGBE_MAX_MULTICAST_ADDRESSES_VF);
 
 	ixgbe_free_pci_resources(sc);
 
@@ -708,21 +708,24 @@ static void
 ixv_set_multi(struct ix_softc *sc)
 {
 	struct ifnet       *ifp = &sc->arpcom.ac_if;
-	struct arpcom *ac = &sc->arpcom;
-	uint8_t                 *mta;
-	uint8_t                 *update_ptr;
+	struct ixgbe_hw    *hw = &sc->hw;
+	struct arpcom      *ac = &sc->arpcom;
+	uint8_t            *mta, *update_ptr;
 	struct ether_multi *enm;
 	struct ether_multistep step;
-	int                mcnt = 0;
+	int                xcast_mode, mcnt = 0;
 
 	IOCTL_DEBUGOUT("ixv_set_multi: begin");
 
         mta = sc->mta;
 	bzero(mta, sizeof(uint8_t) * IXGBE_ETH_LENGTH_OF_ADDRESS *
-	      MAX_NUM_MULTICAST_ADDRESSES);
+	      IXGBE_MAX_MULTICAST_ADDRESSES_VF);
 
-	if ((ifp->if_flags & IFF_PROMISC) == 0 && ac->ac_multirangecnt <= 0 &&
-	      ac->ac_multicnt <= MAX_NUM_MULTICAST_ADDRESSES) {
+	ifp->if_flags &= ~IFF_ALLMULTI;
+	if (ifp->if_flags & IFF_PROMISC || ac->ac_multirangecnt > 0 ||
+	    ac->ac_multicnt > IXGBE_MAX_MULTICAST_ADDRESSES_VF) {
+		ifp->if_flags |= IFF_ALLMULTI;
+	} else {
 		ETHER_FIRST_MULTI(step, &sc->arpcom, enm);
 		while (enm != NULL) {
 			bcopy(enm->enm_addrlo,
@@ -734,9 +737,22 @@ ixv_set_multi(struct ix_softc *sc)
 		}
 
 		update_ptr = mta;
-		sc->hw.mac.ops.update_mc_addr_list(&sc->hw, update_ptr, mcnt,
-						   ixv_mc_array_itr, TRUE);
+		hw->mac.ops.update_mc_addr_list(hw, update_ptr, mcnt,
+						ixv_mc_array_itr, TRUE);
 	}
+
+        /* request the most inclusive mode we need */
+        if (ISSET(ifp->if_flags, IFF_PROMISC))
+                xcast_mode = IXGBEVF_XCAST_MODE_PROMISC;
+        else if (ISSET(ifp->if_flags, IFF_ALLMULTI))
+                xcast_mode = IXGBEVF_XCAST_MODE_ALLMULTI;
+        else if (ISSET(ifp->if_flags, (IFF_BROADCAST | IFF_MULTICAST)))
+                xcast_mode = IXGBEVF_XCAST_MODE_MULTI;
+        else
+                xcast_mode = IXGBEVF_XCAST_MODE_NONE;
+
+        hw->mac.ops.update_xcast_mode(hw, xcast_mode);
+
 
 } /* ixv_set_multi */
 
