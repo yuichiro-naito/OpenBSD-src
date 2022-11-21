@@ -4100,6 +4100,7 @@ struct ixgbe_phy_info {
 };
 
 #define IXGBE_VFMAILBOX_SIZE	16 /* 16 32 bit words - 64 bytes */
+#define IXGBE_MAX_MULTICAST_ADDRESSES_VF  30
 
 #define IXGBE_VFMAILBOX		0x002FC
 #define IXGBE_VFMBMEM		0x00200
