@@ -194,9 +194,6 @@ struct ix_txring {
 	bus_dma_tag_t		txtag;
 
 	struct kstat		*kstat;
-
-	uint32_t		bytes;  /* used for AIM */
-	uint32_t		packets;
 };
 
 
@@ -224,9 +221,6 @@ struct ix_rxring {
 	struct ixgbe_rx_buf	*rx_buffers;
 
 	struct kstat		*kstat;
-
-	uint32_t		bytes; /* Used for AIM calc */
-	uint32_t		packets;
 };
 
 /* Our adapter structure */
