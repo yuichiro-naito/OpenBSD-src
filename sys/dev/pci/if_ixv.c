@@ -136,8 +136,6 @@ const struct cfattach ixv_ca = {
 	ixgbe_activate
 };
 
-static int ixv_enable_aim = FALSE;
-
 /*
  * This checks for a zero mac addr, something that will be likely
  * unless the Admin on the Host has created one.
@@ -585,7 +583,6 @@ ixv_msix_que(void *arg)
 	struct ifnet    *ifp = &sc->arpcom.ac_if;
 	struct tx_ring  *txr = que->txr;
 	struct rx_ring  *rxr = que->rxr;
-	uint32_t             newitr = 0;
 
 	if ((ifp->if_flags & IFF_RUNNING) == 0)
 		return 1;
@@ -594,54 +591,6 @@ ixv_msix_que(void *arg)
 
 	ixgbe_rxeof(rxr);
 	ixgbe_txeof(txr);
-
-	/* Do AIM now? */
-
-	if (ixv_enable_aim == FALSE)
-		goto no_calc;
-	/*
-	 * Do Adaptive Interrupt Moderation:
-	 *  - Write out last calculated setting
-	 *  - Calculate based on average size over
-	 *    the last interval.
-	 */
-	if (que->eitr_setting)
-		IXGBE_WRITE_REG(&sc->hw, IXGBE_VTEITR(que->msix),
-		    que->eitr_setting);
-
-	que->eitr_setting = 0;
-
-	/* Idle, do nothing */
-	if ((txr->bytes == 0) && (rxr->bytes == 0))
-		goto no_calc;
-
-	if ((txr->bytes) && (txr->packets))
-		newitr = txr->bytes/txr->packets;
-	if ((rxr->bytes) && (rxr->packets))
-		newitr = max(newitr, (rxr->bytes / rxr->packets));
-	newitr += 24; /* account for hardware frame, crc */
-
-	/* set an upper boundary */
-	newitr = min(newitr, 3000);
-
-	/* Be nice to the mid range */
-	if ((newitr > 300) && (newitr < 1200))
-		newitr = (newitr / 3);
-	else
-		newitr = (newitr / 2);
-
-	newitr |= newitr << 16;
-
-	/* save for next interrupt */
-	que->eitr_setting = newitr;
-
-	/* Reset state */
-	txr->bytes = 0;
-	txr->packets = 0;
-	rxr->bytes = 0;
-	rxr->packets = 0;
-
-no_calc:
 	ixgbe_rxrefill(rxr);
 
 	/* Reenable this interrupt */
