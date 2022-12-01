@@ -2640,8 +2640,6 @@ ixgbe_txeof(struct ix_txring *txr)
 
 	for (;;) {
 		tx_buffer = &txr->tx_buffers[tail];
-		if (tx_buffer->m_head)
-			txr->bytes += tx_buffer->m_head->m_pkthdr.len;
 		last = tx_buffer->eop_index;
 		tx_desc = (struct ixgbe_legacy_tx_desc *)&txr->tx_base[last];
 
@@ -2665,7 +2663,6 @@ ixgbe_txeof(struct ix_txring *txr)
 			break;
 		}
 	}
-	txr->packets++;
 
 	bus_dmamap_sync(txr->txdma.dma_tag, txr->txdma.dma_map,
 	    0, txr->txdma.dma_map->dm_mapsize,
