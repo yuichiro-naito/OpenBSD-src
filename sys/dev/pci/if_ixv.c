@@ -92,10 +92,6 @@ static void	ixv_configure_vlan(struct ifnet *, uint16_t, uint16_t);
 static int	ixv_msix_que(void *);
 static int	ixv_msix_mbx(void *);
 
-/* Deferred interrupt tasklets */
-static void     ixv_handle_link(void *, int);
-
-
 /* Share functions between ixv and ix. */
 void    ixgbe_start(struct ifqueue *ifq);
 int	ixgbe_activate(struct device *, int);
@@ -455,6 +451,8 @@ ixv_init(struct ix_softc *sc)
 {
 	struct ifnet    *ifp = &sc->arpcom.ac_if;
 	struct ixgbe_hw *hw = &sc->hw;
+	struct ix_queue *que = sc->queues;
+	uint32_t        mask;
 	int             i, s, error = 0;
 
 	INIT_DEBUGOUT("ixv_init: begin");
@@ -516,13 +514,14 @@ ixv_init(struct ix_softc *sc)
 	ixv_configure_ivars(sc);
 
 	/* Set up auto-mask */
-	IXGBE_WRITE_REG(hw, IXGBE_VTEIAM, IXGBE_EICS_RTX_QUEUE);
+	mask = (1 << (sc->linkvec));
+	for (i = 0; i < sc->num_queues; i++, que++)
+		mask |= (1 << (que->msix));
+	IXGBE_WRITE_REG(hw, IXGBE_VTEIAM, mask);
 
-	if (sc->sc_intrmap) {
-		/* Set moderation on the Link interrupt */
-		IXGBE_WRITE_REG(&sc->hw, IXGBE_VTEITR(sc->linkvec),
-		    IXGBE_LINK_ITR);
-	}
+	/* Set moderation on the Link interrupt */
+	IXGBE_WRITE_REG(&sc->hw, IXGBE_VTEITR(sc->linkvec),
+			IXGBE_LINK_ITR);
 
 	/* Config/Enable Link */
 	error = hw->mac.ops.get_link_state(hw, &sc->link_enabled);
@@ -608,16 +607,14 @@ ixv_msix_mbx(void *arg)
 {
 	struct ix_softc  *sc = arg;
 	struct ixgbe_hw *hw = &sc->hw;
-	uint32_t             reg;
 
-	/* First get the cause */
-	reg = IXGBE_READ_REG(hw, IXGBE_VTEICS);
-	/* Clear interrupt with write */
-	IXGBE_WRITE_REG(hw, IXGBE_VTEICR, reg);
+	sc->hw.mac.get_link_status = TRUE;
+	KERNEL_LOCK();
+	ixgbe_update_link_status(sc);
+	KERNEL_UNLOCK();
 
-	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, IXGBE_EIMS_OTHER);
+	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, (1 << (sc->linkvec)));
 
-	ixv_handle_link(sc, 0);
 
 	return 1;
 } /* ixv_msix_mbx */
@@ -1139,16 +1136,19 @@ ixv_enable_intr(struct ix_softc *sc)
 {
 	struct ixgbe_hw *hw = &sc->hw;
 	struct ix_queue *que = sc->queues;
-	uint32_t             mask = (IXGBE_EIMS_ENABLE_MASK & ~IXGBE_EIMS_RTX_QUEUE);
+	uint32_t         mask;
+	int              i;
 
-
-	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, mask);
-
-	mask = IXGBE_EIMS_ENABLE_MASK;
-	mask &= ~(IXGBE_EIMS_OTHER | IXGBE_EIMS_LSC);
+	/* For VTEIAC */
+	mask = (1 << (sc->linkvec));
+	for (i = 0; i < sc->num_queues; i++, que++)
+		mask |= (1 << (que->msix));
 	IXGBE_WRITE_REG(hw, IXGBE_VTEIAC, mask);
 
-	for (int i = 0; i < sc->num_queues; i++, que++)
+	/* For VTEIMS */
+	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, (1 << (sc->linkvec)));
+	que = sc->queues;
+	for (i = 0; i < sc->num_queues; i++, que++)
 		ixv_enable_queue(sc, que->msix);
 
 	IXGBE_WRITE_FLUSH(hw);
@@ -1375,21 +1375,6 @@ fail:
 	}
 	return (error);
 } /* ixv_allocate_msix */
-
-/************************************************************************
- * ixv_handle_link - Tasklet handler for MSI-X MBX interrupts
- *
- *   Done outside of interrupt context since the driver might sleep
- ************************************************************************/
-static void
-ixv_handle_link(void *context, int pending)
-{
-	struct ix_softc *sc = context;
-
-	sc->hw.mac.ops.check_link(&sc->hw, &sc->link_speed,
-	    &sc->link_up, FALSE);
-	ixgbe_update_link_status(sc);
-} /* ixv_handle_link */
 
 #if NKSTAT > 0
 enum ixv_counter_idx {
