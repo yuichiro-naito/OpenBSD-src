@@ -514,9 +514,9 @@ ixv_init(struct ix_softc *sc)
 	ixv_configure_ivars(sc);
 
 	/* Set up auto-mask */
-	mask = (1 << (sc->linkvec));
+	mask = (1 << sc->linkvec);
 	for (i = 0; i < sc->num_queues; i++, que++)
-		mask |= (1 << (que->msix));
+		mask |= (1 << que->msix);
 	IXGBE_WRITE_REG(hw, IXGBE_VTEIAM, mask);
 
 	/* Set moderation on the Link interrupt */
@@ -613,7 +613,7 @@ ixv_msix_mbx(void *arg)
 	ixgbe_update_link_status(sc);
 	KERNEL_UNLOCK();
 
-	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, (1 << (sc->linkvec)));
+	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, (1 << sc->linkvec));
 
 
 	return 1;
@@ -1140,13 +1140,13 @@ ixv_enable_intr(struct ix_softc *sc)
 	int              i;
 
 	/* For VTEIAC */
-	mask = (1 << (sc->linkvec));
+	mask = (1 << sc->linkvec);
 	for (i = 0; i < sc->num_queues; i++, que++)
-		mask |= (1 << (que->msix));
+		mask |= (1 << que->msix);
 	IXGBE_WRITE_REG(hw, IXGBE_VTEIAC, mask);
 
 	/* For VTEIMS */
-	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, (1 << (sc->linkvec)));
+	IXGBE_WRITE_REG(hw, IXGBE_VTEIMS, (1 << sc->linkvec));
 	que = sc->queues;
 	for (i = 0; i < sc->num_queues; i++, que++)
 		ixv_enable_queue(sc, que->msix);
