@@ -247,6 +247,12 @@ ixv_attach(struct device *parent, struct device *self, void *aux)
 		goto err_out;
 	}
 
+	/* Allocate our TX/RX Queues */
+	if (ixgbe_allocate_queues(sc)) {
+		printf("ixgbe_allocate_queues() failed!\n");
+		goto err_out;
+	}
+
 	/* A subset of set_mac_type */
 	switch (hw->device_id) {
 	case IXGBE_DEV_ID_82599_VF:
@@ -323,13 +329,6 @@ ixv_attach(struct device *parent, struct device *self, void *aux)
 
 	bcopy(hw->mac.addr, sc->arpcom.ac_enaddr,
 	    IXGBE_ETH_LENGTH_OF_ADDRESS);
-
-
-	/* Allocate our TX/RX Queues */
-	if (ixgbe_allocate_queues(sc)) {
-		printf("ixgbe_allocate_queues() failed!\n");
-		goto err_out;
-	}
 
 	/* Setup OS specific network interface */
 	ixv_setup_interface(self, sc);
