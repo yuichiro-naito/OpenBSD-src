@@ -807,7 +807,8 @@ ixv_setup_interface(struct device *dev, struct ix_softc *sc)
 	ifp->if_capabilities |= IFCAP_CSUM_IPv4;
 
 	if (sc->hw.mac.type != ixgbe_mac_82598EB)
-		ifp->if_capabilities |= IFCAP_TSO;
+		ifp->if_capabilities |= IFCAP_TSOv4 | IFCAP_TSOv6;
+
 
 	/*
 	 * Specify the media types supported by this sc and register
