@@ -596,7 +596,6 @@ int32_t ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	struct ixgbe_mbx_info *mbx = &hw->mbx;
 	struct ixgbe_mac_info *mac = &hw->mac;
 	int32_t ret_val = IXGBE_SUCCESS;
-	uint32_t in_msg = 0;
 	uint32_t links_reg;
 
 	/* If we were hit with a reset drop the link */
@@ -654,26 +653,30 @@ int32_t ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 		*speed = IXGBE_LINK_SPEED_UNKNOWN;
 	}
 
-	/* if the read failed it could just be a mailbox collision, best wait
-	 * until we are called again and don't report an error
-	 */
-	if (ixgbe_read_mbx(hw, &in_msg, 1, 0)) {
-		if (hw->api_version >= ixgbe_mbox_api_15)
-			mac->get_link_status = FALSE;
-		goto out;
-	}
+	if (hw->api_version < ixgbe_mbox_api_15) {
+		uint32_t in_msg = 0;
 
-	if (!(in_msg & IXGBE_VT_MSGTYPE_CTS)) {
-		/* msg is not CTS and is NACK we must have lost CTS status */
-		if (in_msg & IXGBE_VT_MSGTYPE_FAILURE)
-			ret_val = IXGBE_ERR_MBX;
-		goto out;
-	}
+		/* if the read failed it could just be a mailbox collision, best wait
+		 * until we are called again and don't report an error
+		 */
+		if (ixgbe_read_mbx(hw, &in_msg, 1, 0)) {
+			if (hw->api_version >= ixgbe_mbox_api_15)
+				mac->get_link_status = FALSE;
+			goto out;
+		}
 
-	/* the pf is talking, if we timed out in the past we reinit */
-	if (!mbx->timeout) {
-		ret_val = IXGBE_ERR_TIMEOUT;
-		goto out;
+		if (!(in_msg & IXGBE_VT_MSGTYPE_CTS)) {
+			/* msg is not CTS and is NACK we must have lost CTS status */
+			if (in_msg & IXGBE_VT_MSGTYPE_FAILURE)
+				ret_val = IXGBE_ERR_MBX;
+			goto out;
+		}
+
+		/* the pf is talking, if we timed out in the past we reinit */
+		if (!mbx->timeout) {
+			ret_val = IXGBE_ERR_TIMEOUT;
+			goto out;
+		}
 	}
 
 	/* if we passed all the tests above then the link is up and we no

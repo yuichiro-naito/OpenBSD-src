@@ -628,15 +628,20 @@ static int
 ixv_negotiate_api(struct ix_softc *sc)
 {
 	struct ixgbe_hw *hw = &sc->hw;
-	int             mbx_api[] = { ixgbe_mbox_api_12,
+	int             mbx_api[] = { ixgbe_mbox_api_15,
+				      ixgbe_mbox_api_13,
+				      ixgbe_mbox_api_12,
 	                              ixgbe_mbox_api_11,
 	                              ixgbe_mbox_api_10,
 	                              ixgbe_mbox_api_unknown };
 	int             i = 0;
 
 	while (mbx_api[i] != ixgbe_mbox_api_unknown) {
-		if (ixgbevf_negotiate_api_version(hw, mbx_api[i]) == 0)
+		if (ixgbevf_negotiate_api_version(hw, mbx_api[i]) == 0) {
+			if (hw->api_version >= ixgbe_mbox_api_15)
+				ixgbe_upgrade_mbx_params_vf(hw);
 			return (0);
+		}
 		i++;
 	}
 
