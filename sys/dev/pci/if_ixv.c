@@ -1302,10 +1302,10 @@ ixv_allocate_msix(struct ix_softc *sc)
 {
         struct ixgbe_osdep      *os = &sc->osdep;
         struct pci_attach_args  *pa  = &os->os_pa;
-	int                      i = 0, error = 0;
+	int                      i = 0, error = 0, rid;
 	struct ix_queue         *que;
 	pci_intr_handle_t       ih;
-	pcireg_t                reg, msix_ctrl;
+	pcireg_t                msix_ctrl;
 
 	for (i = 0, que = sc->queues; i < sc->num_queues; i++, que++) {
 		if (pci_intr_map_msix(pa, i, &ih)) {
@@ -1354,11 +1354,11 @@ ixv_allocate_msix(struct ix_softc *sc)
 	 * point to cause it to successfully initialize us.
 	 */
 	if (sc->hw.mac.type == ixgbe_mac_82599_vf &&
-	    pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_MSIX, NULL, &reg)) {
-		reg += PCIR_MSIX_CTRL;
-		msix_ctrl = pci_conf_read(pa->pa_pc, pa->pa_tag, reg);
-		msix_ctrl |= PCI_MSIX_MC_MSIXE;
-		pci_conf_write(pa->pa_pc, pa->pa_tag, msix_ctrl, reg);
+	    pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_MSIX, &rid, NULL)) {
+		rid += PCI_MSIX_CTL;
+		msix_ctrl = pci_conf_read(pa->pa_pc, pa->pa_tag, rid);
+		msix_ctrl |= PCI_MSIX_CTL_ENABLE;
+		pci_conf_write(pa->pa_pc, pa->pa_tag, rid, msix_ctrl);
 	}
 
 	printf(", %s, %d queue%s\n", pci_intr_string(pa->pa_pc, ih),
