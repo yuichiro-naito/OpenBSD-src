@@ -1281,11 +1281,14 @@ ixv_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 
 	default:
 		error = ether_ioctl(ifp, &sc->arpcom, command, data);
-		if (error == 0 && command == SIOCSIFMTU)
-			ixv_init(sc);
 	}
 
-	if (error == ENETRESET) {
+	switch (error) {
+	case 0:
+		if (command == SIOCSIFMTU)
+			ixv_init(sc);
+		break;
+	case ENETRESET:
 		if (ifp->if_flags & IFF_RUNNING) {
 			ixv_disable_intr(sc);
 			ixv_set_multi(sc);
