@@ -468,6 +468,8 @@ ixv_init(struct ix_softc *sc)
 	bcopy(sc->arpcom.ac_enaddr, sc->hw.mac.addr,
 	    IXGBE_ETH_LENGTH_OF_ADDRESS);
 
+	sc->max_frame_size = ifp->if_mtu + ETHER_HDR_LEN + ETHER_CRC_LEN;
+
 	hw->mac.ops.set_rar(hw, 0, hw->mac.addr, 0, 1);
 
 	/* Prepare transmit descriptors and buffers */
