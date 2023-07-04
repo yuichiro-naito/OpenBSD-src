@@ -785,10 +785,6 @@ ixv_setup_interface(struct device *dev, struct ix_softc *sc)
 	ifp->if_capabilities |= IFCAP_CSUM_TCPv6 | IFCAP_CSUM_UDPv6;
 	ifp->if_capabilities |= IFCAP_CSUM_IPv4;
 
-	if (sc->hw.mac.type != ixgbe_mac_82598EB)
-		ifp->if_capabilities |= IFCAP_TSOv4 | IFCAP_TSOv6;
-
-
 	/*
 	 * Specify the media types supported by this sc and register
 	 * callbacks to update media and link information
@@ -835,8 +831,9 @@ ixv_initialize_transmit_units(struct ix_softc *sc)
 	struct ixgbe_hw *hw = &sc->hw;
 	uint64_t tdba;
 	uint32_t txctrl, txdctl;
+	int i;
 
-	for (int i = 0; i < sc->num_queues; i++, txr++) {
+	for (i = 0; i < sc->num_queues; i++) {
 		txr = &sc->tx_rings[i];
 		tdba = txr->txdma.dma_map->dm_segs[0].ds_addr;
 
@@ -940,7 +937,9 @@ ixv_initialize_receive_units(struct ix_softc *sc)
 {
 	struct rx_ring  *rxr = sc->rx_rings;
 	struct ixgbe_hw *hw = &sc->hw;
-	uint32_t             bufsz, psrtype;
+	uint64_t         rdba;
+	uint32_t         reg, rxdctl, bufsz, psrtype;
+	int              i, j, k;
 
 	bufsz = (sc->rx_mbuf_sz - ETHER_ALIGN) >> IXGBE_SRRCTL_BSIZEPKT_SHIFT;
 
@@ -961,15 +960,14 @@ ixv_initialize_receive_units(struct ix_softc *sc)
 		       "  It is likely the receive unit for this VF will not function correctly.\n");
 	}
 
-	for (int i = 0; i < sc->num_queues; i++, rxr++) {
-                uint64_t rdba = rxr->rxdma.dma_map->dm_segs[0].ds_addr;
-		uint32_t reg, rxdctl;
+	for (i = 0; i < sc->num_queues; i++, rxr++) {
+                rdba = rxr->rxdma.dma_map->dm_segs[0].ds_addr;
 
 		/* Disable the queue */
 		rxdctl = IXGBE_READ_REG(hw, IXGBE_VFRXDCTL(i));
 		rxdctl &= ~IXGBE_RXDCTL_ENABLE;
 		IXGBE_WRITE_REG(hw, IXGBE_VFRXDCTL(i), rxdctl);
-		for (int j = 0; j < 10; j++) {
+		for (j = 0; j < 10; j++) {
 			if (IXGBE_READ_REG(hw, IXGBE_VFRXDCTL(i)) &
 			    IXGBE_RXDCTL_ENABLE)
 				msec_delay(1);
@@ -1002,7 +1000,7 @@ ixv_initialize_receive_units(struct ix_softc *sc)
 		/* Do the queue enabling last */
 		rxdctl |= IXGBE_RXDCTL_ENABLE | IXGBE_RXDCTL_VME;
 		IXGBE_WRITE_REG(hw, IXGBE_VFRXDCTL(i), rxdctl);
-		for (int k = 0; k < 10; k++) {
+		for (k = 0; k < 10; k++) {
 			if (IXGBE_READ_REG(hw, IXGBE_VFRXDCTL(i)) &
 			    IXGBE_RXDCTL_ENABLE)
 				break;
@@ -1031,7 +1029,8 @@ static void
 ixv_setup_vlan_support(struct ix_softc *sc)
 {
 	struct ixgbe_hw *hw = &sc->hw;
-	uint32_t             ctrl, vid, vfta, retry;
+	uint32_t         ctrl, vid, vfta, retry;
+	int              i, j;
 
 	/*
 	 * We get here thru init, meaning
@@ -1046,7 +1045,7 @@ ixv_setup_vlan_support(struct ix_softc *sc)
 	sc->vlan_stripping = 1;
 
 	/* Enable the queues */
-	for (int i = 0; i < sc->num_queues; i++) {
+	for (i = 0; i < sc->num_queues; i++) {
 		ctrl = IXGBE_READ_REG(hw, IXGBE_VFRXDCTL(i));
 		ctrl |= IXGBE_RXDCTL_VME;
 		IXGBE_WRITE_REG(hw, IXGBE_VFRXDCTL(i), ctrl);
@@ -1060,7 +1059,7 @@ ixv_setup_vlan_support(struct ix_softc *sc)
 	 * A soft reset zero's out the VFTA, so
 	 * we need to repopulate it now.
 	 */
-	for (int i = 0; i < IXGBE_VFTA_SIZE; i++) {
+	for (i = 0; i < IXGBE_VFTA_SIZE; i++) {
 		if (sc->shadow_vfta[i] == 0)
 			continue;
 		vfta = sc->shadow_vfta[i];
@@ -1069,7 +1068,7 @@ ixv_setup_vlan_support(struct ix_softc *sc)
 		 * based on the bits set in each
 		 * of the array ints.
 		 */
-		for (int j = 0; j < 32; j++) {
+		for (j = 0; j < 32; j++) {
 			retry = 0;
 			if ((vfta & (1 << j)) == 0)
 				continue;
@@ -1185,8 +1184,9 @@ static void
 ixv_configure_ivars(struct ix_softc *sc)
 {
 	struct ix_queue *que = sc->queues;
+	int              i;
 
-	for (int i = 0; i < sc->num_queues; i++, que++) {
+	for (i = 0; i < sc->num_queues; i++, que++) {
 		/* First the RX queue entry */
 		ixv_set_ivar(sc, i, que->msix, 0);
 		/* ... and the TX */
