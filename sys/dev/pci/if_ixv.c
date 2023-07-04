@@ -78,7 +78,7 @@ static void	ixv_initialize_rss_mapping(struct ix_softc *);
 
 static void	ixv_enable_intr(struct ix_softc *);
 static void	ixv_disable_intr(struct ix_softc *);
-static void	ixv_set_multi(struct ix_softc *);
+static void	ixv_iff(struct ix_softc *);
 static void	ixv_set_ivar(struct ix_softc *, uint8_t, uint8_t, int8_t);
 static void	ixv_configure_ivars(struct ix_softc *);
 static uint8_t *ixv_mc_array_itr(struct ixgbe_hw *, uint8_t **, uint32_t *);
@@ -469,7 +469,7 @@ ixv_init(struct ix_softc *sc)
 	ixv_initialize_transmit_units(sc);
 
 	/* Setup Multicast table */
-	ixv_set_multi(sc);
+	ixv_iff(sc);
 
 	/* Use 2k clusters, even for jumbo frames */
 	sc->rx_mbuf_sz = MCLBYTES + ETHER_ALIGN;
@@ -624,12 +624,12 @@ ixv_negotiate_api(struct ix_softc *sc)
 
 
 /************************************************************************
- * ixv_set_multi - Multicast Update
+ * ixv_iff - Multicast Update
  *
  *   Called whenever multicast address list is updated.
  ************************************************************************/
 static void
-ixv_set_multi(struct ix_softc *sc)
+ixv_iff(struct ix_softc *sc)
 {
 	struct ifnet       *ifp = &sc->arpcom.ac_if;
 	struct ixgbe_hw    *hw = &sc->hw;
@@ -639,7 +639,7 @@ ixv_set_multi(struct ix_softc *sc)
 	struct ether_multistep step;
 	int                xcast_mode, mcnt = 0;
 
-	IOCTL_DEBUGOUT("ixv_set_multi: begin");
+	IOCTL_DEBUGOUT("ixv_iff: begin");
 
         mta = sc->mta;
 	bzero(mta, sizeof(uint8_t) * IXGBE_ETH_LENGTH_OF_ADDRESS *
@@ -678,14 +678,14 @@ ixv_set_multi(struct ix_softc *sc)
         hw->mac.ops.update_xcast_mode(hw, xcast_mode);
 
 
-} /* ixv_set_multi */
+} /* ixv_iff */
 
 /************************************************************************
  * ixv_mc_array_itr
  *
  *   An iterator function needed by the multicast shared code.
  *   It feeds the shared code routine the addresses in the
- *   array of ixv_set_multi() one by one.
+ *   array of ixv_iff() one by one.
  ************************************************************************/
 static uint8_t *
 ixv_mc_array_itr(struct ixgbe_hw *hw, uint8_t **update_ptr, uint32_t *vmdq)
@@ -1268,7 +1268,7 @@ ixv_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 	case ENETRESET:
 		if (ifp->if_flags & IFF_RUNNING) {
 			ixv_disable_intr(sc);
-			ixv_set_multi(sc);
+			ixv_iff(sc);
 			ixv_enable_intr(sc);
 		}
 		error = 0;
