@@ -46,10 +46,8 @@ char ixv_driver_version[] = "1.5.32";
  * PCI Device ID Table
  *
  *   Used by probe to select devices to load on
- *   Last field stores an index into ixv_strings
- *   Last entry must be all 0s
  *
- *   { Vendor ID, Device ID, SubVendor ID, SubDevice ID, String Index }
+ *   { Vendor ID, Device ID }
  ************************************************************************/
 const struct pci_matchid ixv_devices[] = {
 	{PCI_VENDOR_INTEL, PCI_PRODUCT_INTEL_82599VF},
