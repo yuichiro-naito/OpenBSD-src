@@ -172,7 +172,6 @@ struct ifnet {				/* and the entries */
 	int	(*if_ioctl)(struct ifnet *, u_long, caddr_t); /* ioctl hook */
 	void	(*if_watchdog)(struct ifnet *);	/* timer routine */
 	int	(*if_wol)(struct ifnet *, int);	/* WoL routine **/
-	void	(*if_configure_vlan)(struct ifnet *, uint16_t, uint16_t);	/* configure vlan id **/
 
 	/* queues */
 	struct	ifqueue if_snd;		/* transmit queue */
