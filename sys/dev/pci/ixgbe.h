@@ -402,7 +402,6 @@ void ixgbe_init_mbx_ops_generic(struct ixgbe_hw *hw);
 void ixgbe_init_mbx_params_vf(struct ixgbe_hw *);
 void ixgbe_upgrade_mbx_params_vf(struct ixgbe_hw *);
 void ixgbe_init_mbx_params_pf(struct ixgbe_hw *);
-void ixgbe_init_mbx_params_pf_id(struct ixgbe_hw *, uint16_t);
 void ixgbe_upgrade_mbx_params_pf(struct ixgbe_hw *, uint16_t);
 
 #endif /* _IXGBE_H_ */
