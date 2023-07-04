@@ -116,6 +116,16 @@ static void	ixv_txq_kstats(struct ix_softc *, struct tx_ring *);
 static void	ixv_kstats_tick(void *);
 #endif
 
+/************************************************************************
+ * Value Definitions
+ ************************************************************************/
+/*
+  Default value for Extended Interrupt Throttling Register.
+  128 * 2.048 uSec will be minimum interrupt iterval for 10GbE link.
+  Minimum interrupt interval can be set from 0 to 2044 in increments of 4.
+ */
+#define IXGBE_EITR_DEFAULT              128
+
 /*********************************************************************
  *  OpenBSD Device Interface Entry Points
  *********************************************************************/
@@ -169,9 +179,6 @@ ixv_identify_hardware(struct ix_softc *sc)
 	sc->hw.subsystem_vendor_id = PCI_VENDOR(reg);
 	sc->hw.subsystem_device_id = PCI_PRODUCT(reg);
 
-	/* Pick up the 82599 and VF settings */
-	if (sc->hw.mac.type != ixgbe_mac_82598EB)
-		sc->hw.phy.smart_speed = ixgbe_smart_speed_on;
 	sc->num_segs = IXGBE_82599_SCATTER;
 }
 
@@ -1252,10 +1259,10 @@ ixv_allocate_msix(struct ix_softc *sc)
 {
         struct ixgbe_osdep      *os = &sc->osdep;
         struct pci_attach_args  *pa  = &os->os_pa;
-	int                      i = 0, error = 0, rid;
+	int                      i = 0, error = 0, off;
 	struct ix_queue         *que;
 	pci_intr_handle_t       ih;
-	pcireg_t                msix_ctrl;
+	pcireg_t                reg;
 
 	for (i = 0, que = sc->queues; i < sc->num_queues; i++, que++) {
 		if (pci_intr_map_msix(pa, i, &ih)) {
@@ -1303,12 +1310,10 @@ ixv_allocate_msix(struct ix_softc *sc)
 	 * ENABLE in the MSI-X control register again at this
 	 * point to cause it to successfully initialize us.
 	 */
-	if (sc->hw.mac.type == ixgbe_mac_82599_vf &&
-	    pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_MSIX, &rid, NULL)) {
-		rid += PCI_MSIX_CTL;
-		msix_ctrl = pci_conf_read(pa->pa_pc, pa->pa_tag, rid);
-		msix_ctrl |= PCI_MSIX_CTL_ENABLE;
-		pci_conf_write(pa->pa_pc, pa->pa_tag, rid, msix_ctrl);
+	if (sc->hw.mac.type == ixgbe_mac_82599_vf) {
+		pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_MSIX, &off, NULL);
+		reg = pci_conf_read(pa->pa_pc, pa->pa_tag, off);
+		pci_conf_write(pa->pa_pc, pa->pa_tag, off, reg | PCI_MSIX_MC_MSIXE);
 	}
 
 	printf(", %s, %d queue%s\n", pci_intr_string(pa->pa_pc, ih),
@@ -1519,12 +1524,9 @@ ixv_kstats_read(struct kstat *ks)
 		if (reg == 0)
 			continue;
 
-		if (ixc->width > 32) {
-			if (sc->hw.mac.type == ixgbe_mac_82598EB)
-				v = IXGBE_READ_REG(hw, reg + 4);
-			else
-				v = ixv_read36(hw, reg, reg + 4);
-		} else
+		if (ixc->width > 32)
+			v = ixv_read36(hw, reg, reg + 4);
+		else
 			v = IXGBE_READ_REG(hw, reg);
 
 		kstat_kv_u64(&kvs[i]) = v;
@@ -1545,17 +1547,9 @@ ixv_rxq_kstats_read(struct kstat *ks)
 	uint32_t i = rxr->me;
 
 	kstat_kv_u64(&stats->qprc) += IXGBE_READ_REG(hw, IXGBE_QPRC(i));
-	if (sc->hw.mac.type == ixgbe_mac_82598EB) {
-		kstat_kv_u64(&stats->qprdc) +=
-		    IXGBE_READ_REG(hw, IXGBE_RNBC(i));
-		kstat_kv_u64(&stats->qbrc) +=
-		    IXGBE_READ_REG(hw, IXGBE_QBRC(i));
-	} else {
-		kstat_kv_u64(&stats->qprdc) +=
-		    IXGBE_READ_REG(hw, IXGBE_QPRDC(i));
-		kstat_kv_u64(&stats->qbrc) +=
-		    ixv_read36(hw, IXGBE_QBRC_L(i), IXGBE_QBRC_H(i));
-	}
+	kstat_kv_u64(&stats->qprdc) += IXGBE_READ_REG(hw, IXGBE_QPRDC(i));
+	kstat_kv_u64(&stats->qbrc) +=
+		ixv_read36(hw, IXGBE_QBRC_L(i), IXGBE_QBRC_H(i));
 
 	getnanouptime(&ks->ks_updated);
 
@@ -1572,13 +1566,8 @@ ixv_txq_kstats_read(struct kstat *ks)
 	uint32_t i = txr->me;
 
 	kstat_kv_u64(&stats->qptc) += IXGBE_READ_REG(hw, IXGBE_QPTC(i));
-	if (sc->hw.mac.type == ixgbe_mac_82598EB) {
-		kstat_kv_u64(&stats->qbtc) +=
-		    IXGBE_READ_REG(hw, IXGBE_QBTC(i));
-	} else {
-		kstat_kv_u64(&stats->qbtc) +=
-		    ixv_read36(hw, IXGBE_QBTC_L(i), IXGBE_QBTC_H(i));
-	}
+	kstat_kv_u64(&stats->qbtc) +=
+		ixv_read36(hw, IXGBE_QBTC_L(i), IXGBE_QBTC_H(i));
 
 	getnanouptime(&ks->ks_updated);
 

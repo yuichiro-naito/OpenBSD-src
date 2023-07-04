@@ -116,8 +116,6 @@
 #define IXGBE_BR_SIZE			4096
 #define IXGBE_QUEUE_MIN_FREE		32
 
-#define IXGBE_EITR_DEFAULT              128
-
 /*
  * Interrupt Moderation parameters
  */
