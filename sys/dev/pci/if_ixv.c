@@ -916,7 +916,11 @@ ixv_initialize_rss_mapping(struct ix_softc *sc)
 		}
 	}
 
-        /*                                                                              * Disable UDP - IP fragments aren't currently being handled                    * and so we end up with a mix of 2-tuple and 4-tuple                           * traffic.                                                                     */
+	/*
+	 * Disable UDP - IP fragments aren't currently being handled
+	 * and so we end up with a mix of 2-tuple and 4-tuple
+	 * traffic.
+	 */
 	mrqc = IXGBE_MRQC_RSSEN
 		| IXGBE_MRQC_RSS_FIELD_IPV4
 		| IXGBE_MRQC_RSS_FIELD_IPV4_TCP
