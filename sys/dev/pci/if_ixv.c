@@ -1251,15 +1251,6 @@ ixv_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		error = ixgbe_rxrinfo(sc, (struct if_rxrinfo *)ifr->ifr_data);
 		break;
 
-	case SIOCGIFSFFPAGE:
-		error = rw_enter(&sc->sfflock, RW_WRITE|RW_INTR);
-		if (error != 0)
-			break;
-
-		error = ixgbe_get_sffpage(sc, (struct if_sffpage *)data);
-		rw_exit(&sc->sfflock);
-		break;
-
 	default:
 		error = ether_ioctl(ifp, &sc->arpcom, command, data);
 	}
