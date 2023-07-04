@@ -266,9 +266,6 @@ ixv_attach(struct device *parent, struct device *self, void *aux)
 	/* Setup the mailbox */
 	ixgbe_init_mbx_params_vf(hw);
 
-	hw->mac.max_tx_queues = 4;
-	hw->mac.max_rx_queues = 4;
-
 	/* Set the right number of segments */
 	sc->num_segs = IXGBE_82599_SCATTER;
 
