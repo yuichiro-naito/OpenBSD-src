@@ -658,20 +658,6 @@ typedef u_int8_t pci_revision_t;
 #define  PCI_MSIX_VC_MASK	0x00000001
 
 /*
- * Capability ID: 0x11
- * MSIX
- */
-
-#define PCI_MSIX_CTL    0x00
-#define PCI_MSIX_CTL_ENABLE     0x80000000
-#define PCI_MSIX_CTL_FUNCMASK   0x40000000
-#define PCI_MSIX_CTL_TBLSIZE_MASK 0x07ff0000
-#define PCI_MSIX_CTL_TBLSIZE_SHIFT 16
-#define PCI_MSIX_CTL_TBLSIZE(ofs)       ((((ofs) & PCI_MSIX_CTL_TBLSIZE_MASK) \
-                >> PCI_MSIX_CTL_TBLSIZE_SHIFT) + 1)
-
-
-/*
  * Interrupt Configuration Register; contains interrupt pin and line.
  */
 #define	PCI_INTERRUPT_REG		0x3c
