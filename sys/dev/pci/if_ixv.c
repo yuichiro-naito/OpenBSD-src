@@ -84,7 +84,6 @@ static void	ixv_configure_ivars(struct ix_softc *);
 static uint8_t *ixv_mc_array_itr(struct ixgbe_hw *, uint8_t **, uint32_t *);
 
 static void	ixv_setup_vlan_support(struct ix_softc *);
-static void	ixv_configure_vlan(struct ifnet *, uint16_t, uint16_t);
 
 /* The MSI-X Interrupt handlers */
 static int	ixv_msix_que(void *);
@@ -772,7 +771,6 @@ ixv_setup_interface(struct device *dev, struct ix_softc *sc)
 	ifp->if_watchdog = ixv_watchdog;
 	ifp->if_hardmtu = IXGBE_MAX_FRAME_SIZE -
 	    ETHER_HDR_LEN - ETHER_CRC_LEN;
-	ifp->if_configure_vlan = ixv_configure_vlan;
 	ifq_set_maxlen(&ifp->if_snd, sc->num_tx_desc - 1);
 
 	ifp->if_capabilities = IFCAP_VLAN_MTU;
@@ -1085,30 +1083,6 @@ ixv_setup_vlan_support(struct ix_softc *sc)
 		}
 	}
 } /* ixv_setup_vlan_support */
-
-static void
-ixv_configure_vlan(struct ifnet *ifp, uint16_t vtag_add, uint16_t vtag_del)
-{
-	struct ix_softc *sc = ifp->if_softc;
-	uint16_t            index, bit;
-
-	if ((vtag_add > 0) && (vtag_add < 4096)) {
-		index = (vtag_add >> 5) & 0x7F;
-		bit = vtag_add & 0x1F;
-		sc->shadow_vfta[index] |= (1 << bit);
-		++sc->num_vlans;
-	}
-
-	if ((vtag_del > 0) && (vtag_del < 4096) && (sc->num_vlans > 0)) {
-		index = (vtag_del >> 5) & 0x7F;
-		bit = vtag_del & 0x1F;
-		sc->shadow_vfta[index] &= ~(1 << bit);
-		--sc->num_vlans;
-	}
-
-	/* Re-init to load the changes */
-	ixv_init(sc);
-} /* ixv_configure_vlan */
 
 /************************************************************************
  * ixv_enable_intr
