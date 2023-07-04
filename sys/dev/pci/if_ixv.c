@@ -130,22 +130,6 @@ const struct cfattach ixv_ca = {
 	ixgbe_activate
 };
 
-/*
- * This checks for a zero mac addr, something that will be likely
- * unless the Admin on the Host has created one.
- */
-static inline bool
-ixv_check_ether_addr(uint8_t *addr)
-{
-	bool status = TRUE;
-
-	if ((addr[0] == 0 && addr[1]== 0 && addr[2] == 0 &&
-	     addr[3] == 0 && addr[4]== 0 && addr[5] == 0))
-		status = FALSE;
-
-	return (status);
-}
-
 /************************************************************************
  * ixv_probe - Device identification routine
  *
@@ -316,17 +300,12 @@ ixv_attach(struct device *parent, struct device *self, void *aux)
 	}
 
 	/* If no mac address was assigned, make a random one */
-	if (!ixv_check_ether_addr(hw->mac.addr)) {
-		uint8_t addr[ETHER_ADDR_LEN];
-		arc4random_buf(&addr, sizeof(addr));
-		addr[0] &= 0xFE;
-		addr[0] |= 0x02;
-		bcopy(addr, hw->mac.addr, sizeof(addr));
-		bcopy(addr, hw->mac.perm_addr, sizeof(addr));
-	}
-
-	bcopy(hw->mac.addr, sc->arpcom.ac_enaddr,
-	    IXGBE_ETH_LENGTH_OF_ADDRESS);
+	if (memcmp(hw->mac.addr, etheranyaddr, ETHER_ADDR_LEN) == 0) {
+		ether_fakeaddr(&sc->arpcom.ac_if);
+		bcopy(sc->arpcom.ac_enaddr, hw->mac.addr, ETHER_ADDR_LEN);
+		bcopy(sc->arpcom.ac_enaddr, hw->mac.perm_addr, ETHER_ADDR_LEN);
+	} else
+		bcopy(hw->mac.addr, sc->arpcom.ac_enaddr, ETHER_ADDR_LEN);
 
 	/* Setup OS specific network interface */
 	ixv_setup_interface(self, sc);
