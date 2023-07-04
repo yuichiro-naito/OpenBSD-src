@@ -82,14 +82,7 @@
  */
 #define IXGBE_TX_OP_THRESHOLD	(sc->num_segs + 2)
 
-/* These defines are used in MTU calculations */
 #define IXGBE_MAX_FRAME_SIZE	9216
-#define IXGBE_MTU_HDR         (ETHER_HDR_LEN + ETHER_CRC_LEN)
-#define IXGBE_MTU_HDR_VLAN    (ETHER_HDR_LEN + ETHER_CRC_LEN + \
-			       ETHER_VLAN_ENCAP_LEN)
-#define IXGBE_MAX_MTU         (IXGBE_MAX_FRAME_SIZE - IXGBE_MTU_HDR)
-#define IXGBE_MAX_MTU_VLAN    (IXGBE_MAX_FRAME_SIZE - IXGBE_MTU_HDR_VLAN)
-
 
 /* Flow control constants */
 #define IXGBE_FC_PAUSE		0xFFFF
