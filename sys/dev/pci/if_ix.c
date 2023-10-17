@@ -3262,8 +3262,6 @@ ixgbe_rxeof(struct rx_ring *rxr)
 				SET(sendmp->m_flags, M_VLANTAG);
 			}
 #endif
-			rxr->packets++;
-			rxr->bytes += sendmp->m_pkthdr.len;
 			if (hashtype != IXGBE_RXDADV_RSSTYPE_NONE) {
 				sendmp->m_pkthdr.ph_flowid = hash;
 				SET(sendmp->m_pkthdr.csum_flags, M_FLOWID);
