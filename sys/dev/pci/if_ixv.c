@@ -1044,11 +1044,8 @@ ixv_setup_vlan_support(struct ix_softc *sc)
 	 * the VFTA and other state, so if there
 	 * have been no vlan's registered do nothing.
 	 */
-	if (sc->num_vlans == 0) {
-		sc->vlan_stripping = 0;
+	if (sc->num_vlans == 0)
 		return;
-	}
-	sc->vlan_stripping = 1;
 
 	/* Enable the queues */
 	for (i = 0; i < sc->num_queues; i++) {
