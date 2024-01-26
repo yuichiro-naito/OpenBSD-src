@@ -4480,7 +4480,7 @@ int32_t ixgbe_read_mbx(struct ixgbe_hw *hw, uint32_t *msg, uint16_t size, uint16
 		size = mbx->size;
 
 	if (mbx->ops.read)
-	    return mbx->ops.read(hw, msg, size, mbx_id);
+		return mbx->ops.read(hw, msg, size, mbx_id);
 
 	return IXGBE_ERR_CONFIG;
 }
