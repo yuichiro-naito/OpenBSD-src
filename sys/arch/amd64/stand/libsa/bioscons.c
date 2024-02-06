@@ -53,6 +53,7 @@ pc_probe(struct consdev *cn)
 {
 	cn->cn_pri = CN_MIDPRI;
 	cn->cn_dev = makedev(12, 0);
+	add_probed_tty(cn->cn_dev);
 	printf(" pc%d", minor(cn->cn_dev));
 
 #if 0
@@ -126,8 +127,12 @@ com_probe(struct consdev *cn)
 	__asm volatile(DOINT(0x11) : "=a" (n) : : "%ecx", "%edx", "cc");
 	n >>= 9;
 	n &= 7;
-	for (i = 0; i < n; i++)
+	for (i = 0; i < n; i++) {
+		extern char ttyname_buf[8];
 		printf(" com%d", i);
+		snprintf(ttyname_buf, sizeof(ttyname_buf), "com%d", i);
+		add_probed_tty(ttydev(ttyname_buf));
+	}
 
 	cn->cn_pri = CN_LOWPRI;
 	/* XXX from i386/conf.c */

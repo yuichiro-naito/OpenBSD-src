@@ -508,6 +508,7 @@ efi_cons_probe(struct consdev *cn)
 {
 	cn->cn_pri = CN_MIDPRI;
 	cn->cn_dev = makedev(12, 0);
+	add_probed_tty(cn->cn_dev);
 	printf(" pc%d", minor(cn->cn_dev));
 }
 
@@ -712,8 +713,12 @@ efi_com_probe(struct consdev *cn)
 	free(handles, sz);
 
 	for (i = 0; i < nitems(serios); i++) {
-		if (serios[i] != NULL)
+		if (serios[i] != NULL) {
+			extern char ttyname_buf[8];
 			printf(" com%d", i);
+			snprintf(ttyname_buf, sizeof(ttyname_buf), "com%d", i);
+			add_probed_tty(ttydev(ttyname_buf));
+		}
 	}
 }
 
