@@ -128,10 +128,8 @@ com_probe(struct consdev *cn)
 	n >>= 9;
 	n &= 7;
 	for (i = 0; i < n; i++) {
-		extern char ttyname_buf[8];
 		printf(" com%d", i);
-		snprintf(ttyname_buf, sizeof(ttyname_buf), "com%d", i);
-		add_probed_tty(ttydev(ttyname_buf));
+		add_probed_tty(makedev(8, i));
 	}
 
 	cn->cn_pri = CN_LOWPRI;
