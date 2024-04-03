@@ -1372,7 +1372,7 @@ vcpu_reload_vmcs_vmx(struct vcpu *vcpu)
 		if (vmclear(&vcpu->vc_control_pa))
 				return (EINVAL);
 		atomic_swap_uint(&vcpu->vc_vmx_vmcs_state, VMCS_CLEARED);
-#ifdef MULTIPROCESSOR
+#if 0
 	} else if (last_ci != ci) {
 		/* We've moved CPUs at some point, so remote VMCLEAR */
 		if (vmx_remote_vmclear(last_ci, vcpu))
@@ -4350,6 +4350,10 @@ vcpu_run_vmx(struct vcpu *vcpu, struct vm_run_params *vrp)
 	if (vcpu_readregs_vmx(vcpu, VM_RWREGS_ALL, 0, &vcpu->vc_exit.vrs))
 		ret = EINVAL;
 	vcpu->vc_exit.cpl = vmm_get_guest_cpu_cpl(vcpu);
+
+	if (vmclear(&vcpu->vc_control_pa))
+		ret = EINVAL;
+	atomic_swap_uint(&vcpu->vc_vmx_vmcs_state, VMCS_CLEARED);
 
 	return (ret);
 }
