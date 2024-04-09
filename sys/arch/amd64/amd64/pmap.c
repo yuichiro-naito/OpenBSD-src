@@ -108,6 +108,7 @@
 #include <sys/pool.h>
 #include <sys/user.h>
 #include <sys/mutex.h>
+#include <crypto/sha1.h>
 
 #include <uvm/uvm.h>
 
@@ -3414,3 +3415,72 @@ pmap_tlb_shoottlb(struct pmap *pm, int shootself)
 	}
 }
 #endif /* MULTIPROCESSOR */
+
+#define VADDR(a)  \
+	((((a->index[3]) << L4_SHIFT) & L4_MASK) |  \
+	 (((a->index[2]) << L3_SHIFT) & L3_MASK) |  \
+	 (((a->index[1]) << L2_SHIFT) & L2_MASK) |  \
+	 (((a->index[0]) << L1_SHIFT) & L1_MASK))
+
+struct pdinfo {
+	long index[5];
+	pd_entry_t entry[5];
+	uint64_t frame[5];
+};
+
+void
+pte_dump_recursive(int lv, struct pdinfo *inf, uint32_t *count, SHA1_CTX *ctx)
+{
+	long i;
+	pd_entry_t *p;
+
+	if (lv == 0) {
+		if (count == NULL)
+			printf("%016lx: %016llx\n", VADDR(inf), inf->entry[lv]);
+		else
+			(*count)++;
+		SHA1Update(ctx, &inf->entry[lv], sizeof(inf->frame[lv]));
+		return;
+	}
+
+	p = (pd_entry_t*)PMAP_DIRECT_MAP(inf->frame[lv]);
+	lv--;
+	for (i = (lv == 3 ? 511 : 0); i < 512; i++) {
+		if (p[i] == 0)
+			continue;
+		inf->frame[lv] = p[i] & PG_FRAME;
+		inf->entry[lv] = p[i];
+		inf->index[lv] = i;
+
+		if (p[i] & PG_PAT) {
+			printf("%016lx: %016llx\n", VADDR(inf), inf->entry[lv]);
+			continue;
+		}
+		pte_dump_recursive(lv, inf, count, ctx);
+	}
+}
+
+
+void
+pte_dump(void)
+{
+	int i;
+	paddr_t cr3 = rcr3();
+	struct pdinfo info;
+	uint32_t count = 0;
+	SHA1_CTX ctx;
+	unsigned char digest[SHA1_DIGEST_LENGTH];
+
+	memset(&info, 0, sizeof(info));
+
+	info.frame[4] = cr3;
+
+	SHA1Init(&ctx);
+
+	pte_dump_recursive(4, &info, NULL, &ctx);
+	SHA1Final(digest, &ctx);
+	printf("nkp: %u\nsha1: ", count);
+	for (i = 0; i< SHA1_DIGEST_LENGTH; i++)
+		printf("%0x", digest[i]);
+	printf("\n");
+}

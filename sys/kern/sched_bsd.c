@@ -355,6 +355,7 @@ mi_switch(void)
 	int hold_count;
 	int sched_count;
 #endif
+	extern void pte_dump(void);
 
 	assertwaitok();
 	KASSERT(p->p_stat != SONPROC);
@@ -415,6 +416,10 @@ mi_switch(void)
 		uvmexp.swtch++;
 		TRACEPOINT(sched, off__cpu, nextproc->p_tid + THREAD_PID_OFFSET,
 		    nextproc->p_p->ps_pid);
+		if (nextproc->p_addr->u_pcb.pcb_rsp == 0) {
+			printf("invalid pcb_rsp == 0\n");
+			pte_dump();
+		}
 		cpu_switchto(p, nextproc);
 		TRACEPOINT(sched, on__cpu, NULL);
 	} else {
