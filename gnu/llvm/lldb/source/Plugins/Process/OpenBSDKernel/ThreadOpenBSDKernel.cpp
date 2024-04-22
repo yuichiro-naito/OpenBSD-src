@@ -1,4 +1,4 @@
-//===-- ThreadFreeBSDKernel.cpp -------------------------------------------===//
+//===-- ThreadOpenBSDKernel.cpp -------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,41 +6,41 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ThreadFreeBSDKernel.h"
+#include "ThreadOpenBSDKernel.h"
 
 #include "lldb/Target/Unwind.h"
 #include "lldb/Utility/Log.h"
 
-#include "Plugins/Process/Utility/RegisterContextFreeBSD_i386.h"
-#include "Plugins/Process/Utility/RegisterContextFreeBSD_x86_64.h"
+#include "Plugins/Process/Utility/RegisterContextOpenBSD_i386.h"
+#include "Plugins/Process/Utility/RegisterContextOpenBSD_x86_64.h"
 #include "Plugins/Process/Utility/RegisterInfoPOSIX_arm64.h"
-#include "ProcessFreeBSDKernel.h"
-#include "RegisterContextFreeBSDKernel_arm64.h"
-#include "RegisterContextFreeBSDKernel_i386.h"
-#include "RegisterContextFreeBSDKernel_x86_64.h"
-#include "ThreadFreeBSDKernel.h"
+#include "ProcessOpenBSDKernel.h"
+#include "RegisterContextOpenBSDKernel_arm64.h"
+#include "RegisterContextOpenBSDKernel_i386.h"
+#include "RegisterContextOpenBSDKernel_x86_64.h"
+#include "ThreadOpenBSDKernel.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
-ThreadFreeBSDKernel::ThreadFreeBSDKernel(Process &process, lldb::tid_t tid,
+ThreadOpenBSDKernel::ThreadOpenBSDKernel(Process &process, lldb::tid_t tid,
                                          lldb::addr_t pcb_addr,
                                          std::string thread_name)
     : Thread(process, tid), m_thread_name(std::move(thread_name)),
       m_pcb_addr(pcb_addr) {}
 
-ThreadFreeBSDKernel::~ThreadFreeBSDKernel() {}
+ThreadOpenBSDKernel::~ThreadOpenBSDKernel() {}
 
-void ThreadFreeBSDKernel::RefreshStateAfterStop() {}
+void ThreadOpenBSDKernel::RefreshStateAfterStop() {}
 
-lldb::RegisterContextSP ThreadFreeBSDKernel::GetRegisterContext() {
+lldb::RegisterContextSP ThreadOpenBSDKernel::GetRegisterContext() {
   if (!m_reg_context_sp)
     m_reg_context_sp = CreateRegisterContextForFrame(nullptr);
   return m_reg_context_sp;
 }
 
 lldb::RegisterContextSP
-ThreadFreeBSDKernel::CreateRegisterContextForFrame(StackFrame *frame) {
+ThreadOpenBSDKernel::CreateRegisterContextForFrame(StackFrame *frame) {
   RegisterContextSP reg_ctx_sp;
   uint32_t concrete_frame_idx = 0;
 
@@ -51,28 +51,28 @@ ThreadFreeBSDKernel::CreateRegisterContextForFrame(StackFrame *frame) {
     if (m_thread_reg_ctx_sp)
       return m_thread_reg_ctx_sp;
 
-    ProcessFreeBSDKernel *process =
-        static_cast<ProcessFreeBSDKernel *>(GetProcess().get());
+    ProcessOpenBSDKernel *process =
+        static_cast<ProcessOpenBSDKernel *>(GetProcess().get());
     ArchSpec arch = process->GetTarget().GetArchitecture();
 
     switch (arch.GetMachine()) {
     case llvm::Triple::aarch64:
       m_thread_reg_ctx_sp =
-          std::make_shared<RegisterContextFreeBSDKernel_arm64>(
+          std::make_shared<RegisterContextOpenBSDKernel_arm64>(
               *this, std::make_unique<RegisterInfoPOSIX_arm64>(arch, 0),
               m_pcb_addr);
       break;
     case llvm::Triple::x86:
-      m_thread_reg_ctx_sp = std::make_shared<RegisterContextFreeBSDKernel_i386>(
-          *this, new RegisterContextFreeBSD_i386(arch), m_pcb_addr);
+      m_thread_reg_ctx_sp = std::make_shared<RegisterContextOpenBSDKernel_i386>(
+          *this, new RegisterContextOpenBSD_i386(arch), m_pcb_addr);
       break;
     case llvm::Triple::x86_64:
       m_thread_reg_ctx_sp =
-          std::make_shared<RegisterContextFreeBSDKernel_x86_64>(
-              *this, new RegisterContextFreeBSD_x86_64(arch), m_pcb_addr);
+          std::make_shared<RegisterContextOpenBSDKernel_x86_64>(
+              *this, new RegisterContextOpenBSD_x86_64(arch), m_pcb_addr);
       break;
     default:
-      assert(false && "Unsupported architecture passed to ThreadFreeBSDKernel");
+      assert(false && "Unsupported architecture passed to ThreadOpenBSDKernel");
       break;
     }
 
@@ -83,4 +83,4 @@ ThreadFreeBSDKernel::CreateRegisterContextForFrame(StackFrame *frame) {
   return reg_ctx_sp;
 }
 
-bool ThreadFreeBSDKernel::CalculateStopInfo() { return false; }
+bool ThreadOpenBSDKernel::CalculateStopInfo() { return false; }

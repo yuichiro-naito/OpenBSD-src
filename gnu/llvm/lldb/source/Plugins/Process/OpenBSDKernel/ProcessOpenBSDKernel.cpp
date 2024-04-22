@@ -1,4 +1,4 @@
-//===-- ProcessFreeBSDKernel.cpp ------------------------------------------===//
+//===-- ProcessOpenBSDKernel.cpp ------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,30 +11,30 @@
 #include "lldb/Target/DynamicLoader.h"
 
 #include "Plugins/DynamicLoader/Static/DynamicLoaderStatic.h"
-#include "ProcessFreeBSDKernel.h"
-#include "ThreadFreeBSDKernel.h"
+#include "ProcessOpenBSDKernel.h"
+#include "ThreadOpenBSDKernel.h"
 
 #if LLDB_ENABLE_FBSDVMCORE
 #include <fvc.h>
 #endif
-#if defined(__FreeBSD__)
+#if defined(__OpenBSD__)
 #include <kvm.h>
 #endif
 
 using namespace lldb;
 using namespace lldb_private;
 
-LLDB_PLUGIN_DEFINE(ProcessFreeBSDKernel)
+LLDB_PLUGIN_DEFINE(ProcessOpenBSDKernel)
 
 namespace {
 
 #if LLDB_ENABLE_FBSDVMCORE
-class ProcessFreeBSDKernelFVC : public ProcessFreeBSDKernel {
+class ProcessOpenBSDKernelFVC : public ProcessOpenBSDKernel {
 public:
-  ProcessFreeBSDKernelFVC(lldb::TargetSP target_sp, lldb::ListenerSP listener,
+  ProcessOpenBSDKernelFVC(lldb::TargetSP target_sp, lldb::ListenerSP listener,
                           fvc_t *fvc);
 
-  ~ProcessFreeBSDKernelFVC();
+  ~ProcessOpenBSDKernelFVC();
 
   size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
                       lldb_private::Status &error) override;
@@ -46,13 +46,13 @@ private:
 };
 #endif // LLDB_ENABLE_FBSDVMCORE
 
-#if defined(__FreeBSD__)
-class ProcessFreeBSDKernelKVM : public ProcessFreeBSDKernel {
+#if defined(__OpenBSD__)
+class ProcessOpenBSDKernelKVM : public ProcessOpenBSDKernel {
 public:
-  ProcessFreeBSDKernelKVM(lldb::TargetSP target_sp, lldb::ListenerSP listener,
+  ProcessOpenBSDKernelKVM(lldb::TargetSP target_sp, lldb::ListenerSP listener,
                           kvm_t *fvc);
 
-  ~ProcessFreeBSDKernelKVM();
+  ~ProcessOpenBSDKernelKVM();
 
   size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
                       lldb_private::Status &error) override;
@@ -62,15 +62,15 @@ private:
 
   const char *GetError();
 };
-#endif // defined(__FreeBSD__)
+#endif // defined(__OpenBSD__)
 
 } // namespace
 
-ProcessFreeBSDKernel::ProcessFreeBSDKernel(lldb::TargetSP target_sp,
+ProcessOpenBSDKernel::ProcessOpenBSDKernel(lldb::TargetSP target_sp,
                                            ListenerSP listener_sp)
     : PostMortemProcess(target_sp, listener_sp) {}
 
-lldb::ProcessSP ProcessFreeBSDKernel::CreateInstance(lldb::TargetSP target_sp,
+lldb::ProcessSP ProcessOpenBSDKernel::CreateInstance(lldb::TargetSP target_sp,
                                                      ListenerSP listener_sp,
                                                      const FileSpec *crash_file,
                                                      bool can_connect) {
@@ -81,23 +81,23 @@ lldb::ProcessSP ProcessFreeBSDKernel::CreateInstance(lldb::TargetSP target_sp,
         fvc_open(executable->GetFileSpec().GetPath().c_str(),
                  crash_file->GetPath().c_str(), nullptr, nullptr, nullptr);
     if (fvc)
-      return std::make_shared<ProcessFreeBSDKernelFVC>(target_sp, listener_sp,
+      return std::make_shared<ProcessOpenBSDKernelFVC>(target_sp, listener_sp,
                                                        fvc);
 #endif
 
-#if defined(__FreeBSD__)
+#if defined(__OpenBSD__)
     kvm_t *kvm =
         kvm_open2(executable->GetFileSpec().GetPath().c_str(),
                   crash_file->GetPath().c_str(), O_RDONLY, nullptr, nullptr);
     if (kvm)
-      return std::make_shared<ProcessFreeBSDKernelKVM>(target_sp, listener_sp,
+      return std::make_shared<ProcessOpenBSDKernelKVM>(target_sp, listener_sp,
                                                        kvm);
 #endif
   }
   return nullptr;
 }
 
-void ProcessFreeBSDKernel::Initialize() {
+void ProcessOpenBSDKernel::Initialize() {
   static llvm::once_flag g_once_flag;
 
   llvm::call_once(g_once_flag, []() {
@@ -106,20 +106,20 @@ void ProcessFreeBSDKernel::Initialize() {
   });
 }
 
-void ProcessFreeBSDKernel::Terminate() {
-  PluginManager::UnregisterPlugin(ProcessFreeBSDKernel::CreateInstance);
+void ProcessOpenBSDKernel::Terminate() {
+  PluginManager::UnregisterPlugin(ProcessOpenBSDKernel::CreateInstance);
 }
 
-Status ProcessFreeBSDKernel::DoDestroy() { return Status(); }
+Status ProcessOpenBSDKernel::DoDestroy() { return Status(); }
 
-bool ProcessFreeBSDKernel::CanDebug(lldb::TargetSP target_sp,
+bool ProcessOpenBSDKernel::CanDebug(lldb::TargetSP target_sp,
                                     bool plugin_specified_by_name) {
   return true;
 }
 
-void ProcessFreeBSDKernel::RefreshStateAfterStop() {}
+void ProcessOpenBSDKernel::RefreshStateAfterStop() {}
 
-bool ProcessFreeBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
+bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
                                               ThreadList &new_thread_list) {
   if (old_thread_list.GetSize(false) == 0) {
     // Make up the thread the first time this is called so we can set our one
@@ -179,7 +179,7 @@ bool ProcessFreeBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
         ReadSignedIntegerFromMemory(FindSymbol("pcb_size"), 4, -1, error);
     lldb::addr_t stoppcbs = FindSymbol("stoppcbs");
 
-    // from FreeBSD sys/param.h
+    // from OpenBSD sys/param.h
     constexpr size_t fbsd_maxcomlen = 19;
 
     // iterate through a linked list of all processes
@@ -242,7 +242,7 @@ bool ProcessFreeBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
         }
 
         ThreadSP thread_sp{
-            new ThreadFreeBSDKernel(*this, tid, pcb_addr, thread_desc)};
+            new ThreadOpenBSDKernel(*this, tid, pcb_addr, thread_desc)};
         new_thread_list.AddThread(thread_sp);
       }
     }
@@ -254,19 +254,19 @@ bool ProcessFreeBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
   return new_thread_list.GetSize(false) > 0;
 }
 
-Status ProcessFreeBSDKernel::DoLoadCore() {
+Status ProcessOpenBSDKernel::DoLoadCore() {
   // The core is already loaded by CreateInstance().
   return Status();
 }
 
-DynamicLoader *ProcessFreeBSDKernel::GetDynamicLoader() {
+DynamicLoader *ProcessOpenBSDKernel::GetDynamicLoader() {
   if (m_dyld_up.get() == nullptr)
     m_dyld_up.reset(DynamicLoader::FindPlugin(
         this, DynamicLoaderStatic::GetPluginNameStatic()));
   return m_dyld_up.get();
 }
 
-lldb::addr_t ProcessFreeBSDKernel::FindSymbol(const char *name) {
+lldb::addr_t ProcessOpenBSDKernel::FindSymbol(const char *name) {
   ModuleSP mod_sp = GetTarget().GetExecutableModule();
   const Symbol *sym = mod_sp->FindFirstSymbolWithNameAndType(ConstString(name));
   return sym ? sym->GetLoadAddress(&GetTarget()) : LLDB_INVALID_ADDRESS;
@@ -274,17 +274,17 @@ lldb::addr_t ProcessFreeBSDKernel::FindSymbol(const char *name) {
 
 #if LLDB_ENABLE_FBSDVMCORE
 
-ProcessFreeBSDKernelFVC::ProcessFreeBSDKernelFVC(lldb::TargetSP target_sp,
+ProcessOpenBSDKernelFVC::ProcessOpenBSDKernelFVC(lldb::TargetSP target_sp,
                                                  ListenerSP listener_sp,
                                                  fvc_t *fvc)
-    : ProcessFreeBSDKernel(target_sp, listener_sp), m_fvc(fvc) {}
+    : ProcessOpenBSDKernel(target_sp, listener_sp), m_fvc(fvc) {}
 
-ProcessFreeBSDKernelFVC::~ProcessFreeBSDKernelFVC() {
+ProcessOpenBSDKernelFVC::~ProcessOpenBSDKernelFVC() {
   if (m_fvc)
     fvc_close(m_fvc);
 }
 
-size_t ProcessFreeBSDKernelFVC::DoReadMemory(lldb::addr_t addr, void *buf,
+size_t ProcessOpenBSDKernelFVC::DoReadMemory(lldb::addr_t addr, void *buf,
                                              size_t size, Status &error) {
   ssize_t rd = 0;
   rd = fvc_read(m_fvc, addr, buf, size);
@@ -295,23 +295,23 @@ size_t ProcessFreeBSDKernelFVC::DoReadMemory(lldb::addr_t addr, void *buf,
   return rd;
 }
 
-const char *ProcessFreeBSDKernelFVC::GetError() { return fvc_geterr(m_fvc); }
+const char *ProcessOpenBSDKernelFVC::GetError() { return fvc_geterr(m_fvc); }
 
 #endif // LLDB_ENABLE_FBSDVMCORE
 
-#if defined(__FreeBSD__)
+#if defined(__OpenBSD__)
 
-ProcessFreeBSDKernelKVM::ProcessFreeBSDKernelKVM(lldb::TargetSP target_sp,
+ProcessOpenBSDKernelKVM::ProcessOpenBSDKernelKVM(lldb::TargetSP target_sp,
                                                  ListenerSP listener_sp,
                                                  kvm_t *fvc)
-    : ProcessFreeBSDKernel(target_sp, listener_sp), m_kvm(fvc) {}
+    : ProcessOpenBSDKernel(target_sp, listener_sp), m_kvm(fvc) {}
 
-ProcessFreeBSDKernelKVM::~ProcessFreeBSDKernelKVM() {
+ProcessOpenBSDKernelKVM::~ProcessOpenBSDKernelKVM() {
   if (m_kvm)
     kvm_close(m_kvm);
 }
 
-size_t ProcessFreeBSDKernelKVM::DoReadMemory(lldb::addr_t addr, void *buf,
+size_t ProcessOpenBSDKernelKVM::DoReadMemory(lldb::addr_t addr, void *buf,
                                              size_t size, Status &error) {
   ssize_t rd = 0;
   rd = kvm_read2(m_kvm, addr, buf, size);
@@ -322,6 +322,6 @@ size_t ProcessFreeBSDKernelKVM::DoReadMemory(lldb::addr_t addr, void *buf,
   return rd;
 }
 
-const char *ProcessFreeBSDKernelKVM::GetError() { return kvm_geterr(m_kvm); }
+const char *ProcessOpenBSDKernelKVM::GetError() { return kvm_geterr(m_kvm); }
 
-#endif // defined(__FreeBSD__)
+#endif // defined(__OpenBSD__)

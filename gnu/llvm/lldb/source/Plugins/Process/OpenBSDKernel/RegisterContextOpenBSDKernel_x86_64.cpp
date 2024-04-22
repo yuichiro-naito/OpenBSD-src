@@ -1,4 +1,4 @@
-//===-- RegisterContextFreeBSDKernel_x86_64.cpp ---------------------------===//
+//===-- RegisterContextOpenBSDKernel_x86_64.cpp ---------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RegisterContextFreeBSDKernel_x86_64.h"
+#include "RegisterContextOpenBSDKernel_x86_64.h"
 
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Thread.h"
@@ -16,26 +16,26 @@
 using namespace lldb;
 using namespace lldb_private;
 
-RegisterContextFreeBSDKernel_x86_64::RegisterContextFreeBSDKernel_x86_64(
+RegisterContextOpenBSDKernel_x86_64::RegisterContextOpenBSDKernel_x86_64(
     Thread &thread, RegisterInfoInterface *register_info, lldb::addr_t pcb_addr)
     : RegisterContextPOSIX_x86(thread, 0, register_info), m_pcb_addr(pcb_addr) {
 }
 
-bool RegisterContextFreeBSDKernel_x86_64::ReadGPR() { return true; }
+bool RegisterContextOpenBSDKernel_x86_64::ReadGPR() { return true; }
 
-bool RegisterContextFreeBSDKernel_x86_64::ReadFPR() { return true; }
+bool RegisterContextOpenBSDKernel_x86_64::ReadFPR() { return true; }
 
-bool RegisterContextFreeBSDKernel_x86_64::WriteGPR() {
+bool RegisterContextOpenBSDKernel_x86_64::WriteGPR() {
   assert(0);
   return false;
 }
 
-bool RegisterContextFreeBSDKernel_x86_64::WriteFPR() {
+bool RegisterContextOpenBSDKernel_x86_64::WriteFPR() {
   assert(0);
   return false;
 }
 
-bool RegisterContextFreeBSDKernel_x86_64::ReadRegister(
+bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
     const RegisterInfo *reg_info, RegisterValue &value) {
   if (m_pcb_addr == LLDB_INVALID_ADDRESS)
     return false;
@@ -82,7 +82,7 @@ bool RegisterContextFreeBSDKernel_x86_64::ReadRegister(
   return true;
 }
 
-bool RegisterContextFreeBSDKernel_x86_64::WriteRegister(
+bool RegisterContextOpenBSDKernel_x86_64::WriteRegister(
     const RegisterInfo *reg_info, const RegisterValue &value) {
   return false;
 }

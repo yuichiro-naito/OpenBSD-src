@@ -1,4 +1,4 @@
-//===-- ProcessFreeBSDKernel.h ----------------------------------*- C++ -*-===//
+//===-- ProcessOpenBSDKernel.h ----------------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,9 +11,9 @@
 
 #include "lldb/Target/PostMortemProcess.h"
 
-class ProcessFreeBSDKernel : public lldb_private::PostMortemProcess {
+class ProcessOpenBSDKernel : public lldb_private::PostMortemProcess {
 public:
-  ProcessFreeBSDKernel(lldb::TargetSP target_sp, lldb::ListenerSP listener);
+  ProcessOpenBSDKernel(lldb::TargetSP target_sp, lldb::ListenerSP listener);
 
   static lldb::ProcessSP
   CreateInstance(lldb::TargetSP target_sp, lldb::ListenerSP listener,
@@ -27,7 +27,7 @@ public:
   static llvm::StringRef GetPluginNameStatic() { return "freebsd-kernel"; }
 
   static llvm::StringRef GetPluginDescriptionStatic() {
-    return "FreeBSD kernel vmcore debugging plug-in.";
+    return "OpenBSD kernel vmcore debugging plug-in.";
   }
 
   llvm::StringRef GetPluginName() override { return GetPluginNameStatic(); }
