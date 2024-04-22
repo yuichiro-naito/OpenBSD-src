@@ -87,8 +87,8 @@ lldb::ProcessSP ProcessOpenBSDKernel::CreateInstance(lldb::TargetSP target_sp,
 
 #if defined(__OpenBSD__)
     kvm_t *kvm =
-        kvm_open2(executable->GetFileSpec().GetPath().c_str(),
-                  crash_file->GetPath().c_str(), O_RDONLY, nullptr, nullptr);
+        kvm_open(executable->GetFileSpec().GetPath().c_str(),
+		 crash_file->GetPath().c_str(), nullptr, O_RDONLY, nullptr);
     if (kvm)
       return std::make_shared<ProcessOpenBSDKernelKVM>(target_sp, listener_sp,
                                                        kvm);
@@ -314,7 +314,7 @@ ProcessOpenBSDKernelKVM::~ProcessOpenBSDKernelKVM() {
 size_t ProcessOpenBSDKernelKVM::DoReadMemory(lldb::addr_t addr, void *buf,
                                              size_t size, Status &error) {
   ssize_t rd = 0;
-  rd = kvm_read2(m_kvm, addr, buf, size);
+  rd = kvm_read(m_kvm, addr, buf, size);
   if (rd < 0 || static_cast<size_t>(rd) != size) {
     error.SetErrorStringWithFormat("Reading memory failed: %s", GetError());
     return rd > 0 ? rd : 0;
