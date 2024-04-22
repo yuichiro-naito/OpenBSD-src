@@ -124,6 +124,18 @@ SRCS+=	MinidumpTypes.cpp \
 SRCS+=	ScriptedProcess.cpp \
 	ScriptedThread.cpp
 
+# Process/OpenBSDKernel
+SRCS+=	ProcessOpenBSDKernel.cpp \
+	ProcessOpenBSDKernel.h \
+	RegisterContextOpenBSDKernel_arm64.cpp \
+	RegisterContextOpenBSDKernel_arm64.h \
+	RegisterContextOpenBSDKernel_i386.cpp \
+	RegisterContextOpenBSDKernel_i386.h \
+	RegisterContextOpenBSDKernel_x86_64.cpp \
+	RegisterContextOpenBSDKernel_x86_64.h \
+	ThreadOpenBSDKernel.cpp \
+	ThreadOpenBSDKernel.h
+
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/Process/OpenBSD
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/Process/POSIX
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/Process/gdb-remote
@@ -132,6 +144,7 @@ SRCS+=	ScriptedProcess.cpp \
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/Process/mach-core
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/Process/minidump
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/Process/scripted
+.PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/Process/OpenBSDKernel
 
 install:
 	@# Nothing here so far ...
