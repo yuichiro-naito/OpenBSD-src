@@ -6,6 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if defined(__OpenBSD__)
+#include <sys/types.h>
+#include <sys/time.h>
+#define _KERNEL
+#include <machine/cpu.h>
+#undef _KERNEL
+#include <machine/pcb.h>
+#endif
+
 #include "RegisterContextOpenBSDKernel_x86_64.h"
 
 #include "lldb/Target/Process.h"
@@ -17,8 +26,8 @@ using namespace lldb;
 using namespace lldb_private;
 
 RegisterContextOpenBSDKernel_x86_64::RegisterContextOpenBSDKernel_x86_64(
-    Thread &thread, RegisterInfoInterface *register_info, lldb::addr_t pcb_addr)
-    : RegisterContextPOSIX_x86(thread, 0, register_info), m_pcb_addr(pcb_addr) {
+    Thread &thread, RegisterInfoInterface *register_info, lldb::addr_t cpu_info)
+    : RegisterContextPOSIX_x86(thread, 0, register_info), m_cpu_info(cpu_info) {
 }
 
 bool RegisterContextOpenBSDKernel_x86_64::ReadGPR() { return true; }
@@ -37,23 +46,17 @@ bool RegisterContextOpenBSDKernel_x86_64::WriteFPR() {
 
 bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
     const RegisterInfo *reg_info, RegisterValue &value) {
-  if (m_pcb_addr == LLDB_INVALID_ADDRESS)
+  if (m_cpu_info == LLDB_INVALID_ADDRESS)
     return false;
 
-  struct {
-    llvm::support::ulittle64_t r15;
-    llvm::support::ulittle64_t r14;
-    llvm::support::ulittle64_t r13;
-    llvm::support::ulittle64_t r12;
-    llvm::support::ulittle64_t rbp;
-    llvm::support::ulittle64_t rsp;
-    llvm::support::ulittle64_t rbx;
-    llvm::support::ulittle64_t rip;
-  } pcb;
-
+  struct pcb pcb;
   Status error;
-  size_t rd =
-      m_thread.GetProcess()->ReadMemory(m_pcb_addr, &pcb, sizeof(pcb), error);
+  struct cpu_info *ci = (struct cpu_info *)m_cpu_info;
+
+  lldb::addr_t p_pcb =
+    m_thread.GetProcess()->ReadPointerFromMemory((lldb::addr_t)&ci->ci_curpcb, error);
+
+  size_t rd = m_thread.GetProcess()->ReadMemory(p_pcb, &pcb, sizeof(pcb), error);
   if (rd != sizeof(pcb))
     return false;
 
@@ -61,17 +64,11 @@ bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
   switch (reg) {
 #define REG(x)                                                                 \
   case lldb_##x##_x86_64:                                                      \
-    value = pcb.x;                                                             \
+    value = pcb.pcb_##x;                                                       \
     break;
 
-    REG(r15);
-    REG(r14);
-    REG(r13);
-    REG(r12);
     REG(rbp);
     REG(rsp);
-    REG(rbx);
-    REG(rip);
 
 #undef REG
 

@@ -14,7 +14,7 @@
 class ThreadOpenBSDKernel : public lldb_private::Thread {
 public:
   ThreadOpenBSDKernel(lldb_private::Process &process, lldb::tid_t tid,
-                      lldb::addr_t pcb_addr, std::string thread_name);
+                      lldb::addr_t cpu_info, std::string thread_name);
 
   ~ThreadOpenBSDKernel() override;
 
@@ -44,7 +44,7 @@ protected:
 private:
   std::string m_thread_name;
   lldb::RegisterContextSP m_thread_reg_ctx_sp;
-  lldb::addr_t m_pcb_addr;
+  lldb::addr_t m_cpu_info;
 };
 
 #endif // LLDB_SOURCE_PLUGINS_PROCESS_FREEBSDKERNEL_THREADFREEBSDKERNEL_H

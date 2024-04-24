@@ -17,7 +17,7 @@ public:
   RegisterContextOpenBSDKernel_x86_64(
       lldb_private::Thread &thread,
       lldb_private::RegisterInfoInterface *register_info,
-      lldb::addr_t pcb_addr);
+      lldb::addr_t cpu_info);
 
   bool ReadRegister(const lldb_private::RegisterInfo *reg_info,
                     lldb_private::RegisterValue &value) override;
@@ -35,7 +35,7 @@ protected:
   bool WriteFPR() override;
 
 private:
-  lldb::addr_t m_pcb_addr;
+  lldb::addr_t m_cpu_info;
 };
 
 #endif // LLDB_SOURCE_PLUGINS_PROCESS_FREEBSDKERNEL_REGISTERCONTEXTFREEBSDKERNEL_X86_64_H
