@@ -24,7 +24,7 @@ public:
 
   static void Terminate();
 
-  static llvm::StringRef GetPluginNameStatic() { return "freebsd-kernel"; }
+  static llvm::StringRef GetPluginNameStatic() { return "openbsd-kernel"; }
 
   static llvm::StringRef GetPluginDescriptionStatic() {
     return "OpenBSD kernel vmcore debugging plug-in.";
