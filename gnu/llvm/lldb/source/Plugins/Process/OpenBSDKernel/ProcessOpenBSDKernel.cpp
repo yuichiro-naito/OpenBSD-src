@@ -14,9 +14,6 @@
 #include "ProcessOpenBSDKernel.h"
 #include "ThreadOpenBSDKernel.h"
 
-#if LLDB_ENABLE_FBSDVMCORE
-#include <fvc.h>
-#endif
 #if defined(__OpenBSD__)
 #include <kvm.h>
 #endif
@@ -27,24 +24,6 @@ using namespace lldb_private;
 LLDB_PLUGIN_DEFINE(ProcessOpenBSDKernel)
 
 namespace {
-
-#if LLDB_ENABLE_FBSDVMCORE
-class ProcessOpenBSDKernelFVC : public ProcessOpenBSDKernel {
-public:
-  ProcessOpenBSDKernelFVC(lldb::TargetSP target_sp, lldb::ListenerSP listener,
-                          fvc_t *fvc);
-
-  ~ProcessOpenBSDKernelFVC();
-
-  size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
-                      lldb_private::Status &error) override;
-
-private:
-  fvc_t *m_fvc;
-
-  const char *GetError();
-};
-#endif // LLDB_ENABLE_FBSDVMCORE
 
 #if defined(__OpenBSD__)
 class ProcessOpenBSDKernelKVM : public ProcessOpenBSDKernel {
@@ -76,15 +55,6 @@ lldb::ProcessSP ProcessOpenBSDKernel::CreateInstance(lldb::TargetSP target_sp,
                                                      bool can_connect) {
   ModuleSP executable = target_sp->GetExecutableModule();
   if (crash_file && !can_connect && executable) {
-#if LLDB_ENABLE_FBSDVMCORE
-    fvc_t *fvc =
-        fvc_open(executable->GetFileSpec().GetPath().c_str(),
-                 crash_file->GetPath().c_str(), nullptr, nullptr, nullptr);
-    if (fvc)
-      return std::make_shared<ProcessOpenBSDKernelFVC>(target_sp, listener_sp,
-                                                       fvc);
-#endif
-
 #if defined(__OpenBSD__)
     kvm_t *kvm =
         kvm_open(executable->GetFileSpec().GetPath().c_str(),
@@ -271,33 +241,6 @@ lldb::addr_t ProcessOpenBSDKernel::FindSymbol(const char *name) {
   const Symbol *sym = mod_sp->FindFirstSymbolWithNameAndType(ConstString(name));
   return sym ? sym->GetLoadAddress(&GetTarget()) : LLDB_INVALID_ADDRESS;
 }
-
-#if LLDB_ENABLE_FBSDVMCORE
-
-ProcessOpenBSDKernelFVC::ProcessOpenBSDKernelFVC(lldb::TargetSP target_sp,
-                                                 ListenerSP listener_sp,
-                                                 fvc_t *fvc)
-    : ProcessOpenBSDKernel(target_sp, listener_sp), m_fvc(fvc) {}
-
-ProcessOpenBSDKernelFVC::~ProcessOpenBSDKernelFVC() {
-  if (m_fvc)
-    fvc_close(m_fvc);
-}
-
-size_t ProcessOpenBSDKernelFVC::DoReadMemory(lldb::addr_t addr, void *buf,
-                                             size_t size, Status &error) {
-  ssize_t rd = 0;
-  rd = fvc_read(m_fvc, addr, buf, size);
-  if (rd < 0 || static_cast<size_t>(rd) != size) {
-    error.SetErrorStringWithFormat("Reading memory failed: %s", GetError());
-    return rd > 0 ? rd : 0;
-  }
-  return rd;
-}
-
-const char *ProcessOpenBSDKernelFVC::GetError() { return fvc_geterr(m_fvc); }
-
-#endif // LLDB_ENABLE_FBSDVMCORE
 
 #if defined(__OpenBSD__)
 
