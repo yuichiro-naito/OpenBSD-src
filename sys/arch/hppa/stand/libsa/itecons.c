@@ -95,6 +95,7 @@ ite_probe(cn)
 	} else {
 		cn->cn_pri = CN_MIDPRI;
 		cn->cn_dev = makedev(0, 0);
+		add_probed_tty(cn->cn_dev);
 	}
 }
 
