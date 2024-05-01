@@ -1,4 +1,4 @@
-/*	$OpenBSD: uvm_pdaemon.c,v 1.109 2023/10/27 19:18:53 mpi Exp $	*/
+/*	$OpenBSD: uvm_pdaemon.c,v 1.114 2024/05/01 12:54:27 mpi Exp $	*/
 /*	$NetBSD: uvm_pdaemon.c,v 1.23 2000/08/20 10:24:14 bjh21 Exp $	*/
 
 /*
@@ -276,7 +276,7 @@ uvm_pageout(void *arg)
 #if NDRM > 0
 		drmbackoff(size * 2);
 #endif
-		uvm_lock_pageq();
+		uvm_pmr_cache_drain();
 
 		/*
 		 * scan if needed
