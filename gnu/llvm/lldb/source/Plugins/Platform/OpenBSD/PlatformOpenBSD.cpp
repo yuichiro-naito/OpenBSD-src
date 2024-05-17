@@ -25,6 +25,7 @@
 #include "lldb/Utility/State.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
+#include "Plugins/Process/OpenBSDKernel/ProcessOpenBSDKernel.h"
 
 // Define these constants from OpenBSD mman.h for use when targeting remote
 // openbsd systems even when host has different values.
@@ -91,6 +92,7 @@ void PlatformOpenBSD::Initialize() {
         PlatformOpenBSD::GetPluginNameStatic(false),
         PlatformOpenBSD::GetPluginDescriptionStatic(false),
         PlatformOpenBSD::CreateInstance, nullptr);
+    ProcessOpenBSDKernel::Initialize();
   }
 }
 
