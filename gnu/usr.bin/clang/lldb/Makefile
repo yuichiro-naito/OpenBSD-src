@@ -10,7 +10,7 @@ SRCS=	Driver.cpp \
 	Platform.cpp \
 	Version.cpp
 
-LDADD+=		-lcurses -ledit -lpanel
+LDADD+=		-lcurses -ledit -lpanel -lkvm
 
 CPPFLAGS+=	${LLDB_INCLUDES}
 CPPFLAGS+=	${CLANG_INCLUDES}
