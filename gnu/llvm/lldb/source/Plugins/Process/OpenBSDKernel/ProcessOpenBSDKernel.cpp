@@ -109,22 +109,23 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
 
     Status error;
     int32_t ncpu = ReadSignedIntegerFromMemory(
-            FindSymbol("ncpu"), 4, -1, error);
+            FindSymbol("ncpus"), 4, -1, error);
 
     if (ncpu == -1)
         return false;
 
     lldb::addr_t cpu_info = FindSymbol("cpu_info");
 
-    lldb::addr_t *ci =
-      (lldb::addr_t *)ReadPointerFromMemory(cpu_info == 0 ?
-					    FindSymbol("cpu_info_list") :
-					    cpu_info, error);
+    lldb::addr_t ci =
+      ReadPointerFromMemory(cpu_info == 0xffffffffffffffff ?
+			    FindSymbol("cpu_info_list") :
+			    cpu_info, error);
 
     for (int i = 0; i < ncpu ; i++) {
         std::string thread_desc = llvm::formatv("cpu {0}", i);
-        ThreadSP thread_sp{
-            new ThreadOpenBSDKernel(*this, i, ci[i], thread_desc)};
+        ThreadSP thread_sp {
+		new ThreadOpenBSDKernel(*this, i, ci + sizeof(void*) * i,
+					thread_desc)};
         new_thread_list.AddThread(thread_sp);
     }
   }
