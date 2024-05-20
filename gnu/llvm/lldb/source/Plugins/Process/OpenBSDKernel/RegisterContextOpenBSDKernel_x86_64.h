@@ -17,7 +17,7 @@ public:
   RegisterContextOpenBSDKernel_x86_64(
       lldb_private::Thread &thread,
       lldb_private::RegisterInfoInterface *register_info,
-      lldb::addr_t cpu_info);
+      lldb::addr_t cpu_info, lldb::addr_t dumppcb);
 
   bool ReadRegister(const lldb_private::RegisterInfo *reg_info,
                     lldb_private::RegisterValue &value) override;
@@ -36,6 +36,7 @@ protected:
 
 private:
   lldb::addr_t m_cpu_info;
+  lldb::addr_t m_dumppcb;
 };
 
 #endif // LLDB_SOURCE_PLUGINS_PROCESS_OPENBSDKERNEL_REGISTERCONTEXTOPENBSDKERNEL_X86_64_H

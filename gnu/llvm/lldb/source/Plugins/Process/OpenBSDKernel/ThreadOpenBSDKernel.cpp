@@ -25,9 +25,10 @@ using namespace lldb_private;
 
 ThreadOpenBSDKernel::ThreadOpenBSDKernel(Process &process, lldb::tid_t tid,
                                          lldb::addr_t cpu_info,
+					 lldb::addr_t dumppcb,
                                          std::string thread_name)
     : Thread(process, tid), m_thread_name(std::move(thread_name)),
-      m_cpu_info(cpu_info) {}
+      m_cpu_info(cpu_info), m_dumppcb(dumppcb) {}
 
 ThreadOpenBSDKernel::~ThreadOpenBSDKernel() {}
 
@@ -69,7 +70,8 @@ ThreadOpenBSDKernel::CreateRegisterContextForFrame(StackFrame *frame) {
     case llvm::Triple::x86_64:
       m_thread_reg_ctx_sp =
           std::make_shared<RegisterContextOpenBSDKernel_x86_64>(
-              *this, new RegisterContextOpenBSD_x86_64(arch), m_cpu_info);
+		  *this, new RegisterContextOpenBSD_x86_64(arch), m_cpu_info,
+		  m_dumppcb);
       break;
     default:
       assert(false && "Unsupported architecture passed to ThreadOpenBSDKernel");

@@ -115,17 +115,16 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
         return false;
 
     lldb::addr_t cpu_info = FindSymbol("cpu_info");
+    lldb::addr_t dumppcb = FindSymbol("dumppcb");
 
-    lldb::addr_t ci =
-      ReadPointerFromMemory(cpu_info == 0xffffffffffffffff ?
-			    FindSymbol("cpu_info_list") :
-			    cpu_info, error);
+    lldb::addr_t ci = (cpu_info == LLDB_INVALID_ADDRESS) ?
+      ReadPointerFromMemory(FindSymbol("cpu_info_list"), error) : cpu_info;
 
     for (int i = 0; i < ncpu ; i++) {
         std::string thread_desc = llvm::formatv("cpu {0}", i);
         ThreadSP thread_sp {
 		new ThreadOpenBSDKernel(*this, i, ci + sizeof(void*) * i,
-					thread_desc)};
+					dumppcb, thread_desc)};
         new_thread_list.AddThread(thread_sp);
     }
   }
