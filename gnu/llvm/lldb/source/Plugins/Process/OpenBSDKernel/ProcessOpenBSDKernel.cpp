@@ -16,6 +16,10 @@
 
 #if defined(__OpenBSD__)
 #include <kvm.h>
+#define _KERNEL
+#include <machine/cpu.h>
+#include <sys/proc.h>
+#undef _KERNEL
 #endif
 
 using namespace lldb;
@@ -108,25 +112,45 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
     }
 
     Status error;
-    int32_t ncpu = ReadSignedIntegerFromMemory(
-            FindSymbol("ncpus"), 4, -1, error);
-
-    if (ncpu == -1)
-        return false;
-
-    lldb::addr_t cpu_info = FindSymbol("cpu_info");
     lldb::addr_t dumppcb = FindSymbol("dumppcb");
+    uint32_t offset_p_list = offsetof(proc, p_list);
+    uint32_t offset_p_addr = offsetof(proc, p_addr);
+    uint32_t offset_p_tid = offsetof(proc, p_tid);
+    uint32_t offset_p_p = offsetof(proc, p_p);
+    uint32_t offset_ps_comm = offsetof(process, ps_comm);
+    uint32_t offset_ps_pid = offsetof(process, ps_pid);
+    char    comm[_MAXCOMLEN];
 
-    lldb::addr_t ci = (cpu_info == LLDB_INVALID_ADDRESS) ?
-      ReadPointerFromMemory(FindSymbol("cpu_info_list"), error) : cpu_info;
+    if (dumppcb == LLDB_INVALID_ADDRESS)
+      return false;
 
-    for (int i = 0; i < ncpu ; i++) {
-        std::string thread_desc = llvm::formatv("cpu {0}", i);
-        ThreadSP thread_sp {
-		new ThreadOpenBSDKernel(*this, i, ci + sizeof(void*) * i,
-					dumppcb, thread_desc)};
+    {
+      std::string thread_desc = llvm::formatv("Crashed Thread");
+      ThreadSP thread_sp {
+		new ThreadOpenBSDKernel(*this, 0, dumppcb, thread_desc)};
         new_thread_list.AddThread(thread_sp);
     }
+
+    for (lldb::addr_t proc = ReadPointerFromMemory(FindSymbol("allproc"), error);
+         proc != 0 && proc != LLDB_INVALID_ADDRESS;
+         proc = ReadPointerFromMemory(proc + offset_p_list, error)) {
+
+      lldb::tid_t tid = ReadSignedIntegerFromMemory(proc + offset_p_tid, 4, -1,
+						    error);
+      lldb::addr_t process = ReadPointerFromMemory(proc + offset_p_p, error);
+      ReadMemory(process + offset_ps_comm, &comm, sizeof(comm), error);
+      u_int32_t pid = ReadSignedIntegerFromMemory(process + offset_ps_pid, 4,
+						  -1, error);
+      lldb::addr_t p_addr = ReadPointerFromMemory(proc + offset_p_addr, error);
+      std::string thread_desc = llvm::formatv("(pid:{0}) {1}", pid, comm);
+      ThreadSP thread_sp {
+		new ThreadOpenBSDKernel(*this, tid, p_addr, thread_desc)};
+        new_thread_list.AddThread(thread_sp);
+    }
+  } else {
+    const uint32_t num_threads = old_thread_list.GetSize(false);
+    for (uint32_t i = 0; i < num_threads; ++i)
+      new_thread_list.AddThread(old_thread_list.GetThreadAtIndex(i, false));
   }
   return new_thread_list.GetSize(false) > 0;
 }

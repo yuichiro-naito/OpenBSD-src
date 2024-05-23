@@ -28,9 +28,9 @@ using namespace lldb_private;
 
 RegisterContextOpenBSDKernel_x86_64::RegisterContextOpenBSDKernel_x86_64(
     Thread &thread, RegisterInfoInterface *register_info,
-    lldb::addr_t cpu_info, lldb::addr_t dumppcb)
-  : RegisterContextPOSIX_x86(thread, 0, register_info), m_cpu_info(cpu_info),
-    m_dumppcb(dumppcb) {
+    lldb::addr_t pcb)
+  : RegisterContextPOSIX_x86(thread, 0, register_info),
+    m_pcb(pcb) {
 }
 
 bool RegisterContextOpenBSDKernel_x86_64::ReadGPR() { return true; }
@@ -49,33 +49,15 @@ bool RegisterContextOpenBSDKernel_x86_64::WriteFPR() {
 
 bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
     const RegisterInfo *reg_info, RegisterValue &value) {
-  if (m_cpu_info == LLDB_INVALID_ADDRESS)
+  Status error;
+
+  if (m_pcb == LLDB_INVALID_ADDRESS)
     return false;
 
   struct pcb pcb;
-  struct switchframe sf;
-  Status error;
-  struct cpu_info *ci = (struct cpu_info *)
-    m_thread.GetProcess()->ReadPointerFromMemory(m_cpu_info, error);
-
-  lldb::addr_t p_pcb =
-    m_thread.GetProcess()->ReadPointerFromMemory((lldb::addr_t)&ci->ci_curpcb, error);
-
-  size_t rd = m_thread.GetProcess()->ReadMemory(p_pcb, &pcb, sizeof(pcb), error);
+  size_t rd = m_thread.GetProcess()->ReadMemory(m_pcb, &pcb, sizeof(pcb), error);
   if (rd != sizeof(pcb))
     return false;
-
-  if (pcb.pcb_rbp == 0) {
-    rd = m_thread.GetProcess()->ReadMemory(m_dumppcb, &pcb, sizeof(pcb), error);
-    if (rd != sizeof(pcb))
-      return false;
-  }
-
-  rd = m_thread.GetProcess()->ReadMemory(pcb.pcb_rbp, &sf, sizeof(sf), error);
-  if (rd != sizeof(sf))
-    return false;
-
-  bool use_switchframe = ((u_int64_t)sf.sf_rbp == pcb.pcb_rbp);
 
   uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
   switch (reg) {
@@ -83,10 +65,10 @@ bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
     value = pcb.pcb_rbp;
     break;
   case lldb_rsp_x86_64:
-    value = (use_switchframe) ? pcb.pcb_rsp : pcb.pcb_rsp + 8;
+    value = pcb.pcb_rsp;
     break;
   case lldb_rip_x86_64:
-    value = (use_switchframe) ? (u_int64_t)sf.sf_rip : *((u_int64_t*)&sf);
+    value = m_thread.GetProcess()->ReadPointerFromMemory(pcb.pcb_rbp + 8, error);
     break;
 
   default:

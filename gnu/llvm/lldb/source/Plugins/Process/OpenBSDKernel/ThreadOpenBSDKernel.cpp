@@ -24,11 +24,10 @@ using namespace lldb;
 using namespace lldb_private;
 
 ThreadOpenBSDKernel::ThreadOpenBSDKernel(Process &process, lldb::tid_t tid,
-                                         lldb::addr_t cpu_info,
-					 lldb::addr_t dumppcb,
+					 lldb::addr_t pcb,
                                          std::string thread_name)
     : Thread(process, tid), m_thread_name(std::move(thread_name)),
-      m_cpu_info(cpu_info), m_dumppcb(dumppcb) {}
+      m_pcb(pcb) {}
 
 ThreadOpenBSDKernel::~ThreadOpenBSDKernel() {}
 
@@ -61,17 +60,16 @@ ThreadOpenBSDKernel::CreateRegisterContextForFrame(StackFrame *frame) {
       m_thread_reg_ctx_sp =
           std::make_shared<RegisterContextOpenBSDKernel_arm64>(
               *this, std::make_unique<RegisterInfoPOSIX_arm64>(arch, 0),
-              m_cpu_info);
+              m_pcb);
       break;
     case llvm::Triple::x86:
       m_thread_reg_ctx_sp = std::make_shared<RegisterContextOpenBSDKernel_i386>(
-          *this, new RegisterContextOpenBSD_i386(arch), m_cpu_info);
+          *this, new RegisterContextOpenBSD_i386(arch), m_pcb);
       break;
     case llvm::Triple::x86_64:
       m_thread_reg_ctx_sp =
           std::make_shared<RegisterContextOpenBSDKernel_x86_64>(
-		  *this, new RegisterContextOpenBSD_x86_64(arch), m_cpu_info,
-		  m_dumppcb);
+		  *this, new RegisterContextOpenBSD_x86_64(arch), m_pcb);
       break;
     default:
       assert(false && "Unsupported architecture passed to ThreadOpenBSDKernel");
