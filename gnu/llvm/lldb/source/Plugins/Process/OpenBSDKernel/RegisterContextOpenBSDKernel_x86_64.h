@@ -35,7 +35,7 @@ protected:
   bool WriteFPR() override;
 
 private:
-  lldb::addr_t m_pcb;
+  lldb::addr_t m_pcb_addr;
 };
 
 #endif // LLDB_SOURCE_PLUGINS_PROCESS_OPENBSDKERNEL_REGISTERCONTEXTOPENBSDKERNEL_X86_64_H

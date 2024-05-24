@@ -30,7 +30,7 @@ RegisterContextOpenBSDKernel_x86_64::RegisterContextOpenBSDKernel_x86_64(
     Thread &thread, RegisterInfoInterface *register_info,
     lldb::addr_t pcb)
   : RegisterContextPOSIX_x86(thread, 0, register_info),
-    m_pcb(pcb) {
+    m_pcb_addr(pcb) {
 }
 
 bool RegisterContextOpenBSDKernel_x86_64::ReadGPR() { return true; }
@@ -51,31 +51,57 @@ bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
     const RegisterInfo *reg_info, RegisterValue &value) {
   Status error;
 
-  if (m_pcb == LLDB_INVALID_ADDRESS)
+  if (m_pcb_addr == LLDB_INVALID_ADDRESS)
     return false;
 
   struct pcb pcb;
-  size_t rd = m_thread.GetProcess()->ReadMemory(m_pcb, &pcb, sizeof(pcb), error);
+  size_t rd = m_thread.GetProcess()->ReadMemory(m_pcb_addr, &pcb, sizeof(pcb),
+						error);
   if (rd != sizeof(pcb))
     return false;
 
-  uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
-  switch (reg) {
-  case lldb_rbp_x86_64:
-    value = pcb.pcb_rbp;
-    break;
-  case lldb_rsp_x86_64:
-    value = pcb.pcb_rsp;
-    break;
-  case lldb_rip_x86_64:
-    value = m_thread.GetProcess()->ReadPointerFromMemory(pcb.pcb_rbp + 8, error);
-    break;
-
-  default:
+  /*
+    Usually pcb is written in `cpu_switchto` function. This function writes
+    registers as same as the structure of  `swichframe`  in the stack.
+    We read the frame if it is.
+   */
+  struct switchframe sf;
+  rd = m_thread.GetProcess()->ReadMemory(pcb.pcb_rsp, &sf, sizeof(sf), error);
+  if (rd != sizeof(sf))
     return false;
+
+  uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
+  if (pcb.pcb_rbp == (u_int64_t)sf.sf_rbp) {
+#define SFREG(x)				\
+    case lldb_##x##_x86_64:			\
+      value = (u_int64_t)sf.sf_##x;		\
+      return true;
+#define PCBREG(x)				\
+    case lldb_##x##_x86_64:			\
+      value = pcb.pcb_##x;			\
+      return true;
+    switch (reg) {
+      SFREG(r15);
+      SFREG(r14);
+      SFREG(r13);
+      SFREG(r12);
+      SFREG(rbp);
+      SFREG(rbx);
+      SFREG(rip);
+      PCBREG(rsp);
+    }
+  } else {
+    switch (reg) {
+      PCBREG(rbp);
+      PCBREG(rsp);
+    case lldb_rip_x86_64:
+      value = m_thread.GetProcess()->ReadPointerFromMemory(pcb.pcb_rbp + 8,
+							   error);
+      return true;
+    }
   }
 
-  return true;
+  return false;
 }
 
 bool RegisterContextOpenBSDKernel_x86_64::WriteRegister(
