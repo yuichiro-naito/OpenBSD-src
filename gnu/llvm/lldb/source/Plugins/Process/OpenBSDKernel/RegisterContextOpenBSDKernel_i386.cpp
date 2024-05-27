@@ -6,6 +6,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if defined(__OpenBSD__)
+#include <sys/types.h>
+#include <sys/time.h>
+#define _KERNEL
+#include <machine/cpu.h>
+#undef _KERNEL
+#include <machine/pcb.h>
+#include <frame.h>
+#endif
+
 #include "RegisterContextOpenBSDKernel_i386.h"
 
 #include "lldb/Target/Process.h"
@@ -40,14 +50,8 @@ bool RegisterContextOpenBSDKernel_i386::ReadRegister(
   if (m_pcb_addr == LLDB_INVALID_ADDRESS)
     return false;
 
-  struct {
-    llvm::support::ulittle32_t edi;
-    llvm::support::ulittle32_t esi;
-    llvm::support::ulittle32_t ebp;
-    llvm::support::ulittle32_t esp;
-    llvm::support::ulittle32_t ebx;
-    llvm::support::ulittle32_t eip;
-  } pcb;
+#ifdef __i386__
+  struct pcb pcb;
 
   Status error;
   size_t rd =
@@ -55,26 +59,49 @@ bool RegisterContextOpenBSDKernel_i386::ReadRegister(
   if (rd != sizeof(pcb))
     return false;
 
-  uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
-  switch (reg) {
-#define REG(x)                                                                 \
-  case lldb_##x##_i386:                                                      \
-    value = pcb.x;                                                             \
-    break;
-
-    REG(edi);
-    REG(esi);
-    REG(ebp);
-    REG(esp);
-    REG(eip);
-
-#undef REG
-
-  default:
+  if ((pcb.pcb_flags & PCB_SAVECTX) != 0) {
+    uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
+    switch (reg) {
+#define PCBREG(x)							\
+    case lldb_##x##_i386:						\
+      value = pcb.pcb_##x;						\
+      return true;
+    PCBREG(ebp);
+    PCBREG(esp);
+    case lldb_eip_i386:
+      value = m_thread.GetProcess()->ReadPointerFromMemory(pcb.pcb_ebp + 4,
+							   error);
+      return true;
+    }
     return false;
   }
 
-  return true;
+  /*
+    Usually pcb is written in `cpu_switchto` function. This function writes
+    registers as same as the structure of  `swichframe`  in the stack.
+    We read the frame if it is.
+   */
+  struct switchframe sf;
+  rd = m_thread.GetProcess()->ReadMemory(pcb.pcb_esp, &sf, sizeof(sf), error);
+  if (rd != sizeof(sf))
+    return false;
+
+  uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
+  switch (reg) {
+#define SFREG(x)							\
+    case lldb_##x##_i386:						\
+      value = sf.sf_##x;						\
+      return true;
+
+    SFREG(edi);
+    SFREG(esi);
+    SFREG(ebx);
+    SFREG(eip);
+    PCBREG(ebp);
+    PCBREG(esp);
+  }
+#endif
+  return false;
 }
 
 bool RegisterContextOpenBSDKernel_i386::WriteRegister(

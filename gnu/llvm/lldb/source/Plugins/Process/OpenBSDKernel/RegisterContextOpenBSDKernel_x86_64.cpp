@@ -54,6 +54,7 @@ bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
   if (m_pcb_addr == LLDB_INVALID_ADDRESS)
     return false;
 
+#ifdef __amd64__
   struct pcb pcb;
   size_t rd = m_thread.GetProcess()->ReadMemory(m_pcb_addr, &pcb, sizeof(pcb),
 						error);
@@ -100,7 +101,7 @@ bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
       return true;
     }
   }
-
+#endif
   return false;
 }
 
