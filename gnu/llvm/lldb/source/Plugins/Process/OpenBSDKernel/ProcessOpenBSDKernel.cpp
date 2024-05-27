@@ -112,6 +112,7 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
     }
 
     Status error;
+    int32_t i;
     lldb::addr_t dumppcb = FindSymbol("dumppcb");
     uint32_t offset_p_list = offsetof(proc, p_list);
     uint32_t offset_p_addr = offsetof(proc, p_addr);
@@ -119,16 +120,33 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
     uint32_t offset_p_p = offsetof(proc, p_p);
     uint32_t offset_ps_comm = offsetof(process, ps_comm);
     uint32_t offset_ps_pid = offsetof(process, ps_pid);
+    uint32_t offset_ci_curproc = offsetof(cpu_info, ci_curproc);
     char    comm[_MAXCOMLEN];
 
     if (dumppcb == LLDB_INVALID_ADDRESS)
       return false;
+
+    int32_t ncpu = ReadSignedIntegerFromMemory(FindSymbol("ncpus"),
+					       4, -1, error);
+    if (ncpu < 0)
+      return false;
+
+    lldb::addr_t cpu_procs[ncpu];
 
     {
       std::string thread_desc = llvm::formatv("Crashed Thread");
       ThreadSP thread_sp {
 		new ThreadOpenBSDKernel(*this, 0, dumppcb, thread_desc)};
         new_thread_list.AddThread(thread_sp);
+    }
+
+    lldb::addr_t cpu_info = FindSymbol("cpu_info");
+    lldb::addr_t cpu_info_array = (cpu_info == LLDB_INVALID_ADDRESS) ?
+      ReadPointerFromMemory(FindSymbol("cpu_info_list"), error) : cpu_info;
+    for (i = 0; i < ncpu ; i++) {
+      lldb::addr_t ci =
+	ReadPointerFromMemory(cpu_info_array + sizeof(void*) * i, error);
+      cpu_procs[i] = ReadPointerFromMemory(ci + offset_ci_curproc, error);
     }
 
     for (lldb::addr_t proc = ReadPointerFromMemory(FindSymbol("allproc"), error);
@@ -142,7 +160,14 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
       u_int32_t pid = ReadSignedIntegerFromMemory(process + offset_ps_pid, 4,
 						  -1, error);
       lldb::addr_t p_addr = ReadPointerFromMemory(proc + offset_p_addr, error);
-      std::string thread_desc = llvm::formatv("(pid:{0}) {1}", pid, comm);
+      for (i = 0; i < ncpu; i++)
+	if (cpu_procs[i] == proc)
+	  break;
+      std::string thread_desc;
+      if (i == ncpu)
+	thread_desc = llvm::formatv("(pid:{0}) {1}", pid, comm);
+      else
+	thread_desc = llvm::formatv("(pid:{0}) {1} (cpu {2})", pid, comm, i);
       ThreadSP thread_sp {
 		new ThreadOpenBSDKernel(*this, tid, p_addr, thread_desc)};
         new_thread_list.AddThread(thread_sp);
