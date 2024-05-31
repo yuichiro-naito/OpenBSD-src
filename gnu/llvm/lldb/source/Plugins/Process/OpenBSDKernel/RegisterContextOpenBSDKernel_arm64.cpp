@@ -6,6 +6,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if defined(__OpenBSD__)
+#include <sys/types.h>
+#include <sys/time.h>
+#define _KERNEL
+#include <machine/cpu.h>
+#undef _KERNEL
+#include <machine/pcb.h>
+#include <frame.h>
+#endif
+
 #include "RegisterContextOpenBSDKernel_arm64.h"
 #include "Plugins/Process/Utility/lldb-arm64-register-enums.h"
 
@@ -42,66 +52,53 @@ bool RegisterContextOpenBSDKernel_arm64::ReadRegister(
   if (m_pcb_addr == LLDB_INVALID_ADDRESS)
     return false;
 
-  struct {
-    llvm::support::ulittle64_t x[30];
-    llvm::support::ulittle64_t lr;
-    llvm::support::ulittle64_t _reserved;
-    llvm::support::ulittle64_t sp;
-  } pcb;
-
+#ifdef __aarch64__
   Status error;
-  size_t rd =
-      m_thread.GetProcess()->ReadMemory(m_pcb_addr, &pcb, sizeof(pcb), error);
+  struct pcb pcb;
+  size_t rd = m_thread.GetProcess()->ReadMemory(m_pcb_addr, &pcb, sizeof(pcb),
+						error);
   if (rd != sizeof(pcb))
+    return false;
+
+  /*
+    Usually pcb is written in `cpu_switchto` function. This function writes
+    registers as same as the structure of  `swichframe`  in the stack.
+    We read the frame if it is.
+   */
+  struct switchframe sf;
+  rd = m_thread.GetProcess()->ReadMemory(pcb.pcb_sp, &sf, sizeof(sf), error);
+  if (rd != sizeof(sf))
     return false;
 
   uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
   switch (reg) {
-  case gpr_x0_arm64:
-  case gpr_x1_arm64:
-  case gpr_x2_arm64:
-  case gpr_x3_arm64:
-  case gpr_x4_arm64:
-  case gpr_x5_arm64:
-  case gpr_x6_arm64:
-  case gpr_x7_arm64:
-  case gpr_x8_arm64:
-  case gpr_x9_arm64:
-  case gpr_x10_arm64:
-  case gpr_x11_arm64:
-  case gpr_x12_arm64:
-  case gpr_x13_arm64:
-  case gpr_x14_arm64:
-  case gpr_x15_arm64:
-  case gpr_x16_arm64:
-  case gpr_x17_arm64:
-  case gpr_x18_arm64:
-  case gpr_x19_arm64:
-  case gpr_x20_arm64:
-  case gpr_x21_arm64:
-  case gpr_x22_arm64:
-  case gpr_x23_arm64:
-  case gpr_x24_arm64:
-  case gpr_x25_arm64:
-  case gpr_x26_arm64:
-  case gpr_x27_arm64:
-  case gpr_x28_arm64:
+#define REG(x)					\
+    case gpr_##x##_arm64:			\
+      value = (u_int64_t)sf.sf_##x;		\
+      return true;
+
+    REG(x19);
+    REG(x20);
+    REG(x21);
+    REG(x22);
+    REG(x23);
+    REG(x24);
+    REG(x25);
+    REG(x26);
+    REG(x27);
+    REG(x28);
   case gpr_fp_arm64:
-    static_assert(gpr_fp_arm64 - gpr_x0_arm64 == 29,
-                  "nonconsecutive arm64 register numbers");
-    value = pcb.x[reg - gpr_x0_arm64];
-    break;
+    value = (u_int64_t)sf.sf_x29;
+    return true;
   case gpr_sp_arm64:
-    value = pcb.sp;
-    break;
+    value = (u_int64_t)pcb.pcb_sp;
+    return true;
   case gpr_pc_arm64:
-    // The pc of crashing thread is stored in lr.
-    value = pcb.lr;
-    break;
-  default:
-    return false;
+    value = (u_int64_t)sf.sf_lr;
+    return true;
   }
-  return true;
+#endif
+  return false;
 }
 
 bool RegisterContextOpenBSDKernel_arm64::WriteRegister(
