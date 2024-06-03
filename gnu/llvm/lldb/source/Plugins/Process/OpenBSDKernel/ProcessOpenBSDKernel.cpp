@@ -123,9 +123,6 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
     uint32_t offset_ci_curproc = offsetof(cpu_info, ci_curproc);
     char    comm[_MAXCOMLEN];
 
-    if (dumppcb == LLDB_INVALID_ADDRESS)
-      return false;
-
     int32_t ncpu = ReadSignedIntegerFromMemory(FindSymbol("ncpus"),
 					       4, -1, error);
     if (ncpu < 0)
@@ -133,7 +130,7 @@ bool ProcessOpenBSDKernel::DoUpdateThreadList(ThreadList &old_thread_list,
 
     lldb::addr_t cpu_procs[ncpu];
 
-    {
+    if (dumppcb != LLDB_INVALID_ADDRESS) {
       std::string thread_desc = llvm::formatv("Crashed Thread");
       ThreadSP thread_sp {
 		new ThreadOpenBSDKernel(*this, 0, dumppcb, thread_desc)};
