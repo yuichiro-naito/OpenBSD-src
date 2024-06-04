@@ -100,6 +100,7 @@ void PlatformOpenBSD::Terminate() {
   if (g_initialize_count > 0) {
     if (--g_initialize_count == 0) {
       PluginManager::UnregisterPlugin(PlatformOpenBSD::CreateInstance);
+      ProcessOpenBSDKernel::Terminate();
     }
   }
 
