@@ -584,13 +584,13 @@ struct iavf_vector {
 } __aligned(CACHE_LINE_SIZE);
 
 struct iavf_softc {
-	struct pci_attach_args  *sc_pa;
 	struct device		 sc_dev;
 	struct arpcom		 sc_ac;
 	struct ifmedia		 sc_media;
 	uint64_t		 sc_media_status;
 	uint64_t		 sc_media_active;
 
+	struct pci_attach_args  *sc_pa;
 	pci_chipset_tag_t	 sc_pc;
 	pci_intr_handle_t	 sc_ih;
 	unsigned int             sc_nintrs;
