@@ -581,6 +581,7 @@ struct iavf_vector {
 } __aligned(CACHE_LINE_SIZE);
 
 struct iavf_softc {
+	struct pci_attach_args  *sc_pa;
 	struct device		 sc_dev;
 	struct arpcom		 sc_ac;
 	struct ifmedia		 sc_media;
@@ -791,6 +792,90 @@ iavf_match(struct device *parent, void *match, void *aux)
 	return (pci_matchbyid(aux, iavf_devices, nitems(iavf_devices)));
 }
 
+static int
+iavf_intr_vector(void *v)
+{
+	struct iavf_vector *iv = v;
+	struct iavf_softc *sc = iv->iv_sc;
+
+	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	int rv = 0;
+
+	if (ISSET(ifp->if_flags, IFF_RUNNING)) {
+		rv |= iavf_rxeof(sc, iv->iv_rxr->rxr_ifiq);
+		rv |= iavf_txeof(sc, iv->iv_txr->txr_ifq);
+	}
+
+	return rv;
+}
+
+static int
+iavf_setup_interrupts(struct iavf_softc *sc)
+{
+	unsigned int i, v, nqueues = iavf_nqueues(sc);
+	struct iavf_vector *iv;
+	pci_intr_handle_t ih;
+
+	sc->sc_ihc = pci_intr_establish(sc->sc_pc, sc->sc_ih,
+	    IPL_NET | IPL_MPSAFE, iavf_intr, sc, DEVNAME(sc));
+	if (sc->sc_ihc == NULL) {
+		printf("%s: unable to establish interrupt handler\n",
+		    DEVNAME(sc));
+		return -1;
+	}
+
+	sc->sc_vectors = mallocarray(sizeof(*sc->sc_vectors), nqueues,
+	    M_DEVBUF, M_WAITOK|M_CANFAIL|M_ZERO);
+	if (sc->sc_vectors == NULL) {
+		printf("%s: unable to allocate vectors\n", DEVNAME(sc));
+		return -1;
+	}
+
+	for (i = 0; i < nqueues; i++) {
+		iv = &sc->sc_vectors[i];
+		iv->iv_sc = sc;
+		iv->iv_qid = i;
+		snprintf(iv->iv_name, sizeof(iv->iv_name),
+		    "%s:%u", DEVNAME(sc), i); /* truncated? */
+	}
+
+	if (sc->sc_intrmap) {
+		for (i = 0; i < nqueues; i++) {
+			iv = &sc->sc_vectors[i];
+			v = i + 1; /* 0 is used for adminq */
+
+			if (pci_intr_map_msix(sc->sc_pa, v, &ih)) {
+				printf("%s: unable to map msi-x vector %d\n",
+				    DEVNAME(sc), v);
+				goto free_vectors;
+			}
+
+			iv->iv_ihc = pci_intr_establish_cpu(sc->sc_pc, ih,
+			    IPL_NET | IPL_MPSAFE,
+			    intrmap_cpu(sc->sc_intrmap, i),
+			    iavf_intr_vector, iv, iv->iv_name);
+			if (iv->iv_ihc == NULL) {
+				printf("%s: unable to establish interrupt %d\n",
+				    DEVNAME(sc), v);
+				goto free_vectors;
+			}
+		}
+	}
+
+	return 0;
+free_vectors:
+	if (sc->sc_intrmap != NULL) {
+		for (i = 0; i < nqueues; i++) {
+			struct iavf_vector *iv = &sc->sc_vectors[i];
+			if (iv->iv_ihc == NULL)
+				continue;
+			pci_intr_disestablish(sc->sc_pc, iv->iv_ihc);
+		}
+	}
+	free(sc->sc_vectors, M_DEVBUF, nqueues * sizeof(*sc->sc_vectors));
+	return -1;
+}
+
 void
 iavf_attach(struct device *parent, struct device *self, void *aux)
 {
@@ -803,6 +888,7 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 
 	rw_init(&sc->sc_cfg_lock, "iavfcfg");
 
+	sc->sc_pa = pa;
 	sc->sc_pc = pa->pa_pc;
 	sc->sc_tag = pa->pa_tag;
 	sc->sc_dmat = pa->pa_dmat;
@@ -925,9 +1011,7 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	       nqueues, (nqueues > 1 ? "s" : ""),
 	       ether_sprintf(sc->sc_ac.ac_enaddr));
 
-	sc->sc_ihc = pci_intr_establish(sc->sc_pc, sc->sc_ih,
-	    IPL_NET | IPL_MPSAFE, iavf_intr, sc, DEVNAME(sc));
-	if (sc->sc_ihc == NULL) {
+	if (iavf_setup_interrupts(sc) != 0) {
 		printf("%s: unable to establish interrupt handler\n",
 		    DEVNAME(sc));
 		goto free_scratch;
@@ -2040,7 +2124,7 @@ iavf_rxeof(struct iavf_softc *sc, struct ifiqueue *ifiq)
 		bus_dmamap_sync(sc->sc_dmat, map, 0, map->dm_mapsize,
 		    BUS_DMASYNC_POSTREAD);
 		bus_dmamap_unload(sc->sc_dmat, map);
-		
+
 		m = rxm->rxm_m;
 		rxm->rxm_m = NULL;
 
