@@ -809,6 +809,9 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_nqueues = 0; /* 1 << 0 is 1 queue */
 	sc->sc_tx_ring_ndescs = 1024;
 	sc->sc_rx_ring_ndescs = 1024;
+	sc->sc_tx_itr = 0x07a; /* 4K intrs/sec */
+	sc->sc_rx_itr = 0x07a; /* 4K intrs/sec */
+	sc->sc_nqps_req = ncpus;
 
 	memtype = pci_mapreg_type(sc->sc_pc, sc->sc_tag, IAVF_PCIREG);
 	if (pci_mapreg_map(pa, IAVF_PCIREG, memtype, 0,
