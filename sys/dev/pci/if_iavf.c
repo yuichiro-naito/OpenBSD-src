@@ -81,6 +81,54 @@
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcidevs.h>
 
+/* Packet Classifier Types for filters */
+/* bits 0-28 are reserved for future use */
+#define IXL_PCT_NONF_IPV4_UDP_UCAST	(1ULL << 29)	/* 722 */
+#define IXL_PCT_NONF_IPV4_UDP_MCAST	(1ULL << 30)	/* 722 */
+#define IXL_PCT_NONF_IPV4_UDP		(1ULL << 31)
+#define IXL_PCT_NONF_IPV4_TCP_SYN_NOACK	(1ULL << 32)	/* 722 */
+#define IXL_PCT_NONF_IPV4_TCP		(1ULL << 33)
+#define IXL_PCT_NONF_IPV4_SCTP		(1ULL << 34)
+#define IXL_PCT_NONF_IPV4_OTHER		(1ULL << 35)
+#define IXL_PCT_FRAG_IPV4		(1ULL << 36)
+/* bits 37-38 are reserved for future use */
+#define IXL_PCT_NONF_IPV6_UDP_UCAST	(1ULL << 39)	/* 722 */
+#define IXL_PCT_NONF_IPV6_UDP_MCAST	(1ULL << 40)	/* 722 */
+#define IXL_PCT_NONF_IPV6_UDP		(1ULL << 41)
+#define IXL_PCT_NONF_IPV6_TCP_SYN_NOACK	(1ULL << 42)	/* 722 */
+#define IXL_PCT_NONF_IPV6_TCP		(1ULL << 43)
+#define IXL_PCT_NONF_IPV6_SCTP		(1ULL << 44)
+#define IXL_PCT_NONF_IPV6_OTHER		(1ULL << 45)
+#define IXL_PCT_FRAG_IPV6		(1ULL << 46)
+/* bit 47 is reserved for future use */
+#define IXL_PCT_FCOE_OX			(1ULL << 48)
+#define IXL_PCT_FCOE_RX			(1ULL << 49)
+#define IXL_PCT_FCOE_OTHER		(1ULL << 50)
+/* bits 51-62 are reserved for future use */
+#define IXL_PCT_L2_PAYLOAD		(1ULL << 63)
+
+#define IXL_RSS_HENA_BASE_DEFAULT		\
+	IXL_PCT_NONF_IPV4_UDP |			\
+	IXL_PCT_NONF_IPV4_TCP |			\
+	IXL_PCT_NONF_IPV4_SCTP |		\
+	IXL_PCT_NONF_IPV4_OTHER |		\
+	IXL_PCT_FRAG_IPV4 |			\
+	IXL_PCT_NONF_IPV6_UDP |			\
+	IXL_PCT_NONF_IPV6_TCP |			\
+	IXL_PCT_NONF_IPV6_SCTP |		\
+	IXL_PCT_NONF_IPV6_OTHER |		\
+	IXL_PCT_FRAG_IPV6 |			\
+	IXL_PCT_L2_PAYLOAD
+
+#define IXL_RSS_HENA_BASE_710		IXL_RSS_HENA_BASE_DEFAULT
+#define IXL_RSS_HENA_BASE_722		IXL_RSS_HENA_BASE_DEFAULT | \
+	IXL_PCT_NONF_IPV4_UDP_UCAST |		\
+	IXL_PCT_NONF_IPV4_UDP_MCAST |		\
+	IXL_PCT_NONF_IPV6_UDP_UCAST |		\
+	IXL_PCT_NONF_IPV6_UDP_MCAST |		\
+	IXL_PCT_NONF_IPV4_TCP_SYN_NOACK |	\
+	IXL_PCT_NONF_IPV6_TCP_SYN_NOACK
+
 #ifndef CACHE_LINE_SIZE
 #define CACHE_LINE_SIZE 64
 #endif
@@ -583,12 +631,21 @@ struct iavf_vector {
 	char			 iv_name[16];
 } __aligned(CACHE_LINE_SIZE);
 
+enum i40e_mac_type {
+        I40E_MAC_XL710,
+        I40E_MAC_X722,
+        I40E_MAC_X722_VF,
+        I40E_MAC_VF,
+        I40E_MAC_GENERIC
+};
+
 struct iavf_softc {
 	struct device		 sc_dev;
 	struct arpcom		 sc_ac;
 	struct ifmedia		 sc_media;
 	uint64_t		 sc_media_status;
 	uint64_t		 sc_media_active;
+        enum i40e_mac_type       sc_mac_type;
 
 	struct pci_attach_args  *sc_pa;
 	pci_chipset_tag_t	 sc_pc;
@@ -674,6 +731,7 @@ static void	iavf_atq_done(struct iavf_softc *);
 
 static void	iavf_init_admin_queue(struct iavf_softc *);
 
+static enum i40e_mac_type iavf_mactype(pci_product_id_t);
 static int	iavf_get_version(struct iavf_softc *);
 static int	iavf_get_vf_resources(struct iavf_softc *);
 static int	iavf_config_irq_map(struct iavf_softc *);
@@ -709,6 +767,7 @@ static int	iavf_rxeof(struct iavf_softc *, struct ifiqueue *);
 static void	iavf_rxfill(struct iavf_softc *, struct iavf_rx_ring *);
 static void	iavf_rxrefill(void *);
 static int	iavf_rxrinfo(struct iavf_softc *, struct if_rxrinfo *);
+
 
 struct cfdriver iavf_cd = {
 	NULL,
@@ -793,6 +852,21 @@ static int
 iavf_match(struct device *parent, void *match, void *aux)
 {
 	return (pci_matchbyid(aux, iavf_devices, nitems(iavf_devices)));
+}
+
+static enum i40e_mac_type
+iavf_mactype(pci_product_id_t id)
+{
+
+        switch (id) {
+        case PCI_PRODUCT_INTEL_XL710_VF:
+        case PCI_PRODUCT_INTEL_XL710_VF_HV:
+                return I40E_MAC_VF;
+        case PCI_PRODUCT_INTEL_X722_VF:
+                return I40E_MAC_X722_VF;
+        }
+
+        return I40E_MAC_GENERIC;
 }
 
 static int
@@ -907,6 +981,8 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_tag = pa->pa_tag;
 	sc->sc_dmat = pa->pa_dmat;
 	sc->sc_aq_regs = &iavf_aq_regs;
+
+        sc->sc_mac_type = iavf_mactype(PCI_PRODUCT(pa->pa_id));
 
 	sc->sc_nqueues = 0; /* 1 << 0 is 1 queue */
 	sc->sc_tx_ring_ndescs = 1024;
@@ -1271,7 +1347,8 @@ iavf_config_hena(struct iavf_softc *sc)
 	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
 
 	caps = IAVF_DMA_KVA(&sc->sc_scratch);
-	*caps = 0;
+	*caps = (sc->sc_mac_type == I40E_MAC_X722_VF) ? IXL_RSS_HENA_BASE_722 :
+		IXL_RSS_HENA_BASE_710;
 
 	iavf_atq_post(sc, &iaq);
 	rv = iavf_arq_wait(sc, 250);
