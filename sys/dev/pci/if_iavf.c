@@ -80,6 +80,12 @@
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcidevs.h>
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64
+#endif
+
+#define IXL_MAX_VECTORS			4 /* XXX this is pretty arbitrary */
+
 #define I40E_MASK(mask, shift)		((mask) << (shift))
 #define I40E_AQ_LARGE_BUF		512
 
@@ -517,6 +523,8 @@ struct iavf_dmamem {
 #define IAVF_DMA_KVA(_ixm)	((void *)(_ixm)->ixm_kva)
 #define IAVF_DMA_LEN(_ixm)	((_ixm)->ixm_size)
 
+struct iavf_vector;
+
 struct iavf_tx_map {
 	struct mbuf		*txm_m;
 	bus_dmamap_t		 txm_map;
@@ -525,6 +533,8 @@ struct iavf_tx_map {
 
 struct iavf_tx_ring {
 	unsigned int		 txr_prod;
+	struct iavf_vector	*txr_vector;
+	struct ifqueue		*txr_ifq;
 	unsigned int		 txr_cons;
 
 	struct iavf_tx_map	*txr_maps;
@@ -541,6 +551,8 @@ struct iavf_rx_map {
 
 struct iavf_rx_ring {
 	struct iavf_softc	*rxr_sc;
+	struct iavf_vector	*rxr_vector;
+	struct ifiqueue		*rxr_ifiq;
 
 	struct if_rxring	 rxr_acct;
 	struct timeout		 rxr_refill;
@@ -557,6 +569,15 @@ struct iavf_rx_ring {
 	bus_size_t		 rxr_tail;
 	unsigned int		 rxr_qid;
 };
+
+struct iavf_vector {
+	struct iavf_softc	*iv_sc;
+	struct iavf_rx_ring	*iv_rxr;
+	struct iavf_tx_ring	*iv_txr;
+	int			 iv_qid;
+	void			*iv_ihc;
+	char			 iv_name[16];
+} __aligned(CACHE_LINE_SIZE);
 
 struct iavf_softc {
 	struct device		 sc_dev;
@@ -612,6 +633,10 @@ struct iavf_softc {
 	unsigned int		 sc_tx_ring_ndescs;
 	unsigned int		 sc_rx_ring_ndescs;
 	unsigned int		 sc_nqueues;	/* 1 << sc_nqueues */
+        unsigned int             sc_max_vectors;
+
+	struct intrmap		*sc_intrmap;
+	struct iavf_vector	*sc_vectors;
 
 	struct rwlock		 sc_cfg_lock;
 	unsigned int		 sc_dead;
