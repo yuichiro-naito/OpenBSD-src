@@ -476,6 +476,9 @@ struct iavf_rx_wb_desc_32 {
 #define IAVF_ITR1			0x1
 #define IAVF_ITR2			0x2
 #define IAVF_NOITR			0x3
+#define IAVF_ITR_RX			0x0
+#define IAVF_ITR_TX			0x1
+#define IAVF_ITR_MISC			0x2
 
 #define IAVF_AQ_NUM			256
 #define IAVF_AQ_MASK			(IAVF_AQ_NUM - 1)
@@ -833,6 +836,12 @@ iavf_setup_interrupts(struct iavf_softc *sc)
 
 	for (i = 0; i < nqueues; i++) {
 		iv = &sc->sc_vectors[i];
+		iv->iv_rxr = iavf_rxr_alloc(sc, i);
+		iv->iv_txr = iavf_txr_alloc(sc, i);
+
+		if (iv->iv_rxr == NULL || iv->iv_txr == NULL)
+			goto free_vectors;
+
 		iv->iv_sc = sc;
 		iv->iv_qid = i;
 		snprintf(iv->iv_name, sizeof(iv->iv_name),
@@ -862,6 +871,7 @@ iavf_setup_interrupts(struct iavf_softc *sc)
 		}
 	}
 
+	sc->sc_nintrs = nqueues + 1;
 	return 0;
 free_vectors:
 	if (sc->sc_intrmap != NULL) {
@@ -870,6 +880,10 @@ free_vectors:
 			if (iv->iv_ihc == NULL)
 				continue;
 			pci_intr_disestablish(sc->sc_pc, iv->iv_ihc);
+			if (iv->iv_rxr != NULL)
+				iavf_rxr_free(sc, iv->iv_rxr);
+			if (iv->iv_txr != NULL)
+				iavf_txr_free(sc, iv->iv_txr);
 		}
 	}
 	free(sc->sc_vectors, M_DEVBUF, nqueues * sizeof(*sc->sc_vectors));
@@ -976,11 +990,6 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 		goto free_scratch;
 	}
 
-	if (iavf_config_irq_map(sc) != 0) {
-		printf(", timeout waiting for IRQ map response");
-		goto free_scratch;
-	}
-
 	/* msix only? */
 	if (pci_intr_map_msix(pa, 0, &sc->sc_ih) == 0) {
 		nmsix = pci_intr_msix_count(pa);
@@ -1014,6 +1023,11 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	if (iavf_setup_interrupts(sc) != 0) {
 		printf("%s: unable to establish interrupt handler\n",
 		    DEVNAME(sc));
+		goto free_scratch;
+	}
+
+	if (iavf_config_irq_map(sc) != 0) {
+		printf(", timeout waiting for IRQ map response");
 		goto free_scratch;
 	}
 
@@ -2695,25 +2709,46 @@ iavf_config_irq_map(struct iavf_softc *sc)
 	struct iavf_aq_desc iaq;
 	struct iavf_vc_vector_map *vec;
 	struct iavf_vc_irq_map_info *map;
+	struct iavf_rx_ring *rxr;
+	struct iavf_tx_ring *txr;
+	unsigned int num_vec = 0;
 	int tries;
 
 	memset(&iaq, 0, sizeof(iaq));
 	iaq.iaq_flags = htole16(IAVF_AQ_BUF | IAVF_AQ_RD);
 	iaq.iaq_opcode = htole16(IAVF_AQ_OP_SEND_TO_PF);
 	iaq.iaq_vc_opcode = htole32(IAVF_VC_OP_CONFIG_IRQ_MAP);
-	iaq.iaq_datalen = htole16(sizeof(*map) + sizeof(*vec));
+	iaq.iaq_datalen = htole16(sizeof(*map) + sizeof(*vec) * sc->sc_nintrs);
 	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
 
 	map = IAVF_DMA_KVA(&sc->sc_scratch);
-	map->num_vectors = htole16(1);
-
 	vec = map->vecmap;
-	vec[0].vsi_id = htole16(sc->sc_vsi_id);
-	vec[0].vector_id = 0;
-	vec[0].rxq_map = htole16(iavf_allqueues(sc));
-	vec[0].txq_map = htole16(iavf_allqueues(sc));
-	vec[0].rxitr_idx = htole16(IAVF_NOITR);
-	vec[0].txitr_idx = htole16(IAVF_NOITR);
+	if (sc->sc_nintrs == 1) {
+		vec[num_vec].vsi_id = htole16(sc->sc_vsi_id);
+		vec[num_vec].vector_id = htole16(num_vec);
+		vec[num_vec].rxq_map = htole16(iavf_allqueues(sc));
+		vec[num_vec].txq_map = htole16(iavf_allqueues(sc));
+		vec[num_vec].rxitr_idx = htole16(IAVF_NOITR);
+		vec[num_vec].txitr_idx = htole16(IAVF_NOITR);
+		num_vec++;
+	} else if (sc->sc_nintrs > 1) {
+		for (; num_vec < sc->sc_nintrs - 1; num_vec++) {
+			rxr = sc->sc_vectors[num_vec].iv_rxr;
+			txr = sc->sc_vectors[num_vec].iv_txr;
+			vec[num_vec].vsi_id = htole16(sc->sc_vsi_id);
+			vec[num_vec].vector_id = htole16(num_vec + 1);
+			vec[num_vec].rxq_map = htole16(1 << rxr->rxr_qid);
+			vec[num_vec].txq_map = htole16(1 << txr->txr_qid);
+			vec[num_vec].rxitr_idx = htole16(IAVF_ITR_RX);
+			vec[num_vec].txitr_idx = htole16(IAVF_ITR_TX);
+		}
+		vec[num_vec].vsi_id = htole16(sc->sc_vsi_id);
+		vec[num_vec].vector_id = htole16(0);
+		vec[num_vec].rxq_map = htole16(0);
+		vec[num_vec].txq_map = htole16(0);
+		num_vec++;
+	}
+	map->num_vectors = htole16(num_vec);
 
 	bus_dmamap_sync(sc->sc_dmat, IAVF_DMA_MAP(&sc->sc_scratch), 0, IAVF_DMA_LEN(&sc->sc_scratch),
 	    BUS_DMASYNC_PREREAD);
