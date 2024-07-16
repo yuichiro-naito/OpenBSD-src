@@ -588,6 +588,8 @@ struct iavf_softc {
 
 	pci_chipset_tag_t	 sc_pc;
 	pci_intr_handle_t	 sc_ih;
+	unsigned int             sc_nintrs;
+
 	void			*sc_ihc;
 	pcitag_t		 sc_tag;
 
@@ -630,9 +632,15 @@ struct iavf_softc {
 	struct task		 sc_reset_task;
 	int			 sc_resetting;
 
+        uint32_t                 sc_tx_itr;
+        uint32_t                 sc_rx_itr;
 	unsigned int		 sc_tx_ring_ndescs;
 	unsigned int		 sc_rx_ring_ndescs;
 	unsigned int		 sc_nqueues;	/* 1 << sc_nqueues */
+        unsigned int             sc_nqueue_pairs;
+        unsigned int             sc_nqps_alloc;
+        unsigned int             sc_nqps_vsi;
+        unsigned int             sc_nqps_req;
         unsigned int             sc_max_vectors;
 
 	struct intrmap		*sc_intrmap;
@@ -2234,6 +2242,8 @@ iavf_process_vf_resources(struct iavf_softc *sc, struct iavf_aq_desc *desc,
 	/* is vsi type interesting? */
 
 	sc->sc_vf_id = letoh32(desc->iaq_param[0]);
+        sc->sc_max_vectors = le16toh(vf_res->max_vectors);
+        sc->sc_nqps_vsi = le16toh(vsi_res->num_queue_pairs);
 
 	memcpy(sc->sc_ac.ac_enaddr, vsi_res->default_mac, ETHER_ADDR_LEN);
 
