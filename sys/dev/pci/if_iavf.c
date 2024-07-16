@@ -1328,7 +1328,6 @@ iavf_up(struct iavf_softc *sc)
 	int rv = ENOMEM;
 
 	nqueues = iavf_nqueues(sc);
-	KASSERT(nqueues == 1); /* XXX */
 
 	rw_enter_write(&sc->sc_cfg_lock);
 	if (sc->sc_dead) {
