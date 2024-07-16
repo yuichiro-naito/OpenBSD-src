@@ -62,6 +62,7 @@
 #include <sys/timeout.h>
 #include <sys/task.h>
 #include <sys/syslog.h>
+#include <sys/intrmap.h>
 
 #include <machine/bus.h>
 #include <machine/intr.h>
@@ -84,7 +85,7 @@
 #define CACHE_LINE_SIZE 64
 #endif
 
-#define IXL_MAX_VECTORS			4 /* XXX this is pretty arbitrary */
+#define IAVF_MAX_VECTORS		4 /* XXX this is pretty arbitrary */
 
 #define I40E_MASK(mask, shift)		((mask) << (shift))
 #define I40E_AQ_LARGE_BUF		512
@@ -797,7 +798,8 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
 	struct pci_attach_args *pa = aux;
 	pcireg_t memtype;
-	int tries;
+	int nmsix, tries;
+	unsigned int nqueues;
 
 	rw_init(&sc->sc_cfg_lock, "iavfcfg");
 
@@ -894,7 +896,19 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	}
 
 	/* msix only? */
-	if (pci_intr_map_msix(pa, 0, &sc->sc_ih) != 0) {
+	if (pci_intr_map_msix(pa, 0, &sc->sc_ih) == 0) {
+		nmsix = pci_intr_msix_count(pa);
+		if (nmsix > 1) { /* we used 1 (the 0th) for the adminq */
+			nmsix--;
+
+			sc->sc_intrmap = intrmap_create(&sc->sc_dev,
+			    nmsix, IAVF_MAX_VECTORS, INTRMAP_POWEROF2);
+			nqueues = intrmap_count(sc->sc_intrmap);
+			KASSERT(nqueues > 0);
+			KASSERT(powerof2(nqueues));
+			sc->sc_nqueues = fls(nqueues) - 1;
+		}
+	} else {
 		printf(", unable to map interrupt\n");
 		goto free_scratch;
 	}
