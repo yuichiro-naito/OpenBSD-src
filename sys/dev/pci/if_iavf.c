@@ -913,13 +913,17 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 		goto free_scratch;
 	}
 
+	nqueues = iavf_nqueues(sc);
+
 	/* generate an address if the pf didn't give us one */
 	memcpy(sc->sc_enaddr, sc->sc_ac.ac_enaddr, ETHER_ADDR_LEN);
 	if (memcmp(sc->sc_ac.ac_enaddr, etheranyaddr, ETHER_ADDR_LEN) == 0)
 		ether_fakeaddr(ifp);
 
-	printf(", %s, address %s\n", pci_intr_string(sc->sc_pc, sc->sc_ih),
-	    ether_sprintf(sc->sc_ac.ac_enaddr));
+	printf(", %s, %d queue%s, address %s\n",
+	       pci_intr_string(sc->sc_pc, sc->sc_ih),
+	       nqueues, (nqueues > 1 ? "s" : ""),
+	       ether_sprintf(sc->sc_ac.ac_enaddr));
 
 	sc->sc_ihc = pci_intr_establish(sc->sc_pc, sc->sc_ih,
 	    IPL_NET | IPL_MPSAFE, iavf_intr, sc, DEVNAME(sc));
