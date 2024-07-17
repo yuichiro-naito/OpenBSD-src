@@ -895,6 +895,10 @@ iavf_intr_vector(void *v)
 		rv |= iavf_txeof(sc, iv->iv_txr->txr_ifq);
 	}
 
+	if (rv) {
+		iavf_queue_intr_enable(sc, iv->iv_qid);
+	}
+
 	return rv;
 }
 
@@ -2396,6 +2400,11 @@ iavf_intr(void *xsc)
 		for (i = 0; i < iavf_nqueues(sc); i++) {
 			rv |= iavf_rxeof(sc, ifp->if_iqs[i]);
 			rv |= iavf_txeof(sc, ifp->if_ifqs[i]);
+		}
+	}
+	if (rv) {
+		for (i = 0; i < iavf_nqueues(sc); i++) {
+			iavf_queue_intr_enable(sc, i);
 		}
 	}
 
