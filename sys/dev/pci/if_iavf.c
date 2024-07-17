@@ -1399,10 +1399,9 @@ static int
 iavf_up(struct iavf_softc *sc)
 {
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	struct iavf_vector  *iv;
 	struct iavf_rx_ring *rxr;
-	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
-	int rv = ENOMEM;
 
 	nqueues = iavf_nqueues(sc);
 
@@ -1413,18 +1412,11 @@ iavf_up(struct iavf_softc *sc)
 	}
 
 	for (i = 0; i < nqueues; i++) {
-		rxr = iavf_rxr_alloc(sc, i);
-		if (rxr == NULL)
-			goto free;
-
-		txr = iavf_txr_alloc(sc, i);
-		if (txr == NULL) {
-			iavf_rxr_free(sc, rxr);
-			goto free;
-		}
+		iv = &sc->sc_vectors[i];
+		rxr = iv->iv_rxr;
 
 		ifp->if_iqs[i]->ifiq_softc = rxr;
-		ifp->if_ifqs[i]->ifq_softc = txr;
+		ifp->if_ifqs[i]->ifq_softc = iv->iv_txr;
 
 		iavf_rxfill(sc, rxr);
 	}
@@ -1448,24 +1440,6 @@ iavf_up(struct iavf_softc *sc)
 
 	return (ENETRESET);
 
-free:
-	for (i = 0; i < nqueues; i++) {
-		rxr = ifp->if_iqs[i]->ifiq_softc;
-		txr = ifp->if_ifqs[i]->ifq_softc;
-
-		if (rxr == NULL) {
-			/*
-			 * tx and rx get set at the same time, so if one
-			 * is NULL, the other is too.
-			 */
-			continue;
-		}
-
-		iavf_txr_free(sc, txr);
-		iavf_rxr_free(sc, rxr);
-	}
-	rw_exit_write(&sc->sc_cfg_lock);
-	return (rv);
 down:
 	rw_exit_write(&sc->sc_cfg_lock);
 	iavf_down(sc);
@@ -1585,6 +1559,7 @@ static int
 iavf_down(struct iavf_softc *sc)
 {
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	struct iavf_vector  *iv;
 	struct iavf_rx_ring *rxr;
 	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
@@ -1623,14 +1598,12 @@ iavf_down(struct iavf_softc *sc)
 	}
 
 	for (i = 0; i < nqueues; i++) {
-		rxr = ifp->if_iqs[i]->ifiq_softc;
-		txr = ifp->if_ifqs[i]->ifq_softc;
+		iv = &sc->sc_vectors[i];
+		txr = iv->iv_txr;
+		rxr = iv->iv_rxr;
 
 		iavf_txr_clean(sc, txr);
 		iavf_rxr_clean(sc, rxr);
-
-		iavf_txr_free(sc, txr);
-		iavf_rxr_free(sc, rxr);
 
 		ifp->if_iqs[i]->ifiq_softc = NULL;
 		ifp->if_ifqs[i]->ifq_softc =  NULL;
