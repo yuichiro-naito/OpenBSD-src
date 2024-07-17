@@ -805,13 +805,25 @@ static const struct iavf_aq_regs iavf_aq_regs = {
 	bus_space_read_4((_s)->sc_memt, (_s)->sc_memh, (_r))
 #define iavf_wr(_s, _r, _v) \
 	bus_space_write_4((_s)->sc_memt, (_s)->sc_memh, (_r), (_v))
+#define iavf_flush(_s)  (void)iavf_rd((_s), I40E_VFGEN_RSTAT)
 #define iavf_barrier(_s, _r, _l, _o) \
 	bus_space_barrier((_s)->sc_memt, (_s)->sc_memh, (_r), (_l), (_o))
 #define iavf_intr_enable(_s) \
 	iavf_wr((_s), I40E_VFINT_DYN_CTL01, I40E_VFINT_DYN_CTL0_INTENA_MASK | \
 	    I40E_VFINT_DYN_CTL0_CLEARPBA_MASK | \
 	    (IAVF_NOITR << I40E_VFINT_DYN_CTL0_ITR_INDX_SHIFT)); \
-	iavf_wr((_s), I40E_VFINT_ICR0_ENA1, I40E_VFINT_ICR0_ENA1_ADMINQ_MASK)
+	iavf_wr((_s), I40E_VFINT_ICR0_ENA1, I40E_VFINT_ICR0_ENA1_ADMINQ_MASK);\
+	iavf_flush(_s)
+#define iavf_queue_intr_enable(_s, _q)					\
+        iavf_wr((_s), I40E_VFINT_DYN_CTLN1((_q)),			\
+		I40E_VFINT_DYN_CTLN1_INTENA_MASK |			\
+		I40E_VFINT_DYN_CTLN1_CLEARPBA_MASK |			\
+		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT));	\
+        iavf_flush((_s))
+#define iavf_queue_intr_disable(_s, _q)					\
+        iavf_wr((_s), I40E_VFINT_DYN_CTLN1((_q)),			\
+		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT));	\
+        iavf_flush((_s))
 
 #define iavf_nqueues(_sc)	(1 << (_sc)->sc_nqueues)
 #define iavf_allqueues(_sc)	((1 << ((_sc)->sc_nqueues+1)) - 1)
@@ -1401,6 +1413,7 @@ iavf_up(struct iavf_softc *sc)
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
 	struct iavf_vector  *iv;
 	struct iavf_rx_ring *rxr;
+	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
 
 	nqueues = iavf_nqueues(sc);
@@ -1414,9 +1427,12 @@ iavf_up(struct iavf_softc *sc)
 	for (i = 0; i < nqueues; i++) {
 		iv = &sc->sc_vectors[i];
 		rxr = iv->iv_rxr;
+		txr = iv->iv_txr;
 
 		ifp->if_iqs[i]->ifiq_softc = rxr;
-		ifp->if_ifqs[i]->ifq_softc = iv->iv_txr;
+		ifp->if_ifqs[i]->ifq_softc = txr;
+		rxr->rxr_ifiq = ifp->if_iqs[i];
+		txr->txr_ifq = ifp->if_ifqs[i];
 
 		iavf_rxfill(sc, rxr);
 	}
@@ -1429,6 +1445,10 @@ iavf_up(struct iavf_softc *sc)
 
 	if (iavf_queue_select(sc, IAVF_VC_OP_ENABLE_QUEUES) != 0)
 		goto down;
+
+	for (i = 0; i < nqueues; i++) {
+		iavf_queue_intr_enable(sc, i);
+	}
 
 	SET(ifp->if_flags, IFF_RUNNING);
 
@@ -1589,6 +1609,8 @@ iavf_down(struct iavf_softc *sc)
 	/* make sure no hw generated work is still in flight */
 	intr_barrier(sc->sc_ihc);
 	for (i = 0; i < nqueues; i++) {
+		iavf_queue_intr_disable(sc, i);
+
 		rxr = ifp->if_iqs[i]->ifiq_softc;
 		txr = ifp->if_ifqs[i]->ifq_softc;
 
@@ -1607,6 +1629,8 @@ iavf_down(struct iavf_softc *sc)
 
 		ifp->if_iqs[i]->ifiq_softc = NULL;
 		ifp->if_ifqs[i]->ifq_softc =  NULL;
+		rxr->rxr_ifiq = NULL;
+		txr->txr_ifq = NULL;
 	}
 
 	/* unmask */
