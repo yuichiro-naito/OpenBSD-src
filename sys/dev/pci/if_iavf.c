@@ -2377,7 +2377,7 @@ iavf_intr(void *xsc)
 	struct iavf_softc *sc = xsc;
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
 	uint32_t icr, ena;
-	int i, rv = 0;
+	int i, r, rv = 0;
 
 	ena = iavf_rd(sc, I40E_VFINT_ICR0_ENA1);
 	iavf_intr_enable(sc);
@@ -2398,13 +2398,12 @@ iavf_intr(void *xsc)
 
 	if (ISSET(icr, I40E_VFINT_ICR01_QUEUE_0_MASK)) {
 		for (i = 0; i < iavf_nqueues(sc); i++) {
-			rv |= iavf_rxeof(sc, ifp->if_iqs[i]);
-			rv |= iavf_txeof(sc, ifp->if_ifqs[i]);
-		}
-	}
-	if (rv) {
-		for (i = 0; i < iavf_nqueues(sc); i++) {
-			iavf_queue_intr_enable(sc, i);
+			r = iavf_rxeof(sc, ifp->if_iqs[i]);
+			r |= iavf_txeof(sc, ifp->if_ifqs[i]);
+			if (r) {
+				iavf_queue_intr_enable(sc, i);
+			}
+			rv |= r;
 		}
 	}
 
