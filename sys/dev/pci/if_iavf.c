@@ -575,8 +575,6 @@ struct iavf_dmamem {
 #define IAVF_DMA_KVA(_ixm)	((void *)(_ixm)->ixm_kva)
 #define IAVF_DMA_LEN(_ixm)	((_ixm)->ixm_size)
 
-struct iavf_vector;
-
 struct iavf_tx_map {
 	struct mbuf		*txm_m;
 	bus_dmamap_t		 txm_map;
@@ -645,7 +643,6 @@ struct iavf_softc {
 	uint64_t		 sc_media_active;
 	enum i40e_mac_type       sc_mac_type;
 
-	struct pci_attach_args  *sc_pa;
 	pci_chipset_tag_t	 sc_pc;
 	pci_intr_handle_t	 sc_ih;
 	unsigned int             sc_nintrs;
@@ -891,7 +888,7 @@ iavf_intr_vector(void *v)
 }
 
 static int
-iavf_setup_interrupts(struct iavf_softc *sc)
+iavf_setup_interrupts(struct iavf_softc *sc, struct pci_attach_args *pa)
 {
 	unsigned int i, v, nqueues = iavf_nqueues(sc);
 	struct iavf_vector *iv;
@@ -925,7 +922,7 @@ iavf_setup_interrupts(struct iavf_softc *sc)
 			iv = &sc->sc_vectors[i];
 			v = i + 1; /* 0 is used for adminq */
 
-			if (pci_intr_map_msix(sc->sc_pa, v, &ih)) {
+			if (pci_intr_map_msix(pa, v, &ih)) {
 				printf("%s: unable to map msi-x vector %d\n",
 				    DEVNAME(sc), v);
 				goto free_vectors;
@@ -969,7 +966,6 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 
 	rw_init(&sc->sc_cfg_lock, "iavfcfg");
 
-	sc->sc_pa = pa;
 	sc->sc_pc = pa->pa_pc;
 	sc->sc_tag = pa->pa_tag;
 	sc->sc_dmat = pa->pa_dmat;
@@ -1086,7 +1082,7 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	       nqueues, (nqueues > 1 ? "s" : ""),
 	       ether_sprintf(sc->sc_ac.ac_enaddr));
 
-	if (iavf_setup_interrupts(sc) != 0) {
+	if (iavf_setup_interrupts(sc, pa) != 0) {
 		printf("%s: unable to establish interrupt handler\n",
 		    DEVNAME(sc));
 		goto free_scratch;
