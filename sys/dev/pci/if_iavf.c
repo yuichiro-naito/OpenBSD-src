@@ -956,9 +956,8 @@ free_vectors:
 	if (sc->sc_intrmap != NULL) {
 		for (i = 0; i < nqueues; i++) {
 			struct iavf_vector *iv = &sc->sc_vectors[i];
-			if (iv->iv_ihc == NULL)
-				continue;
-			pci_intr_disestablish(sc->sc_pc, iv->iv_ihc);
+			if (iv->iv_ihc != NULL)
+				pci_intr_disestablish(sc->sc_pc, iv->iv_ihc);
 			if (iv->iv_rxr != NULL)
 				iavf_rxr_free(sc, iv->iv_rxr);
 			if (iv->iv_txr != NULL)
