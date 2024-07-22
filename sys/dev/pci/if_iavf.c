@@ -895,9 +895,7 @@ iavf_intr_vector(void *v)
 		rv |= iavf_txeof(sc, iv->iv_txr->txr_ifq);
 	}
 
-	if (rv) {
-		iavf_queue_intr_enable(sc, iv->iv_qid);
-	}
+	iavf_queue_intr_enable(sc, iv->iv_qid);
 
 	return rv;
 }
