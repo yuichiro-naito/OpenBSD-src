@@ -585,9 +585,8 @@ struct iavf_tx_map {
 
 struct iavf_tx_ring {
 	unsigned int		 txr_prod;
-	struct iavf_vector	*txr_vector;
-	struct ifqueue		*txr_ifq;
 	unsigned int		 txr_cons;
+	struct ifqueue		*txr_ifq;
 
 	struct iavf_tx_map	*txr_maps;
 	struct iavf_dmamem	 txr_mem;
@@ -603,7 +602,6 @@ struct iavf_rx_map {
 
 struct iavf_rx_ring {
 	struct iavf_softc	*rxr_sc;
-	struct iavf_vector	*rxr_vector;
 	struct ifiqueue		*rxr_ifiq;
 
 	struct if_rxring	 rxr_acct;
@@ -694,16 +692,9 @@ struct iavf_softc {
 	struct task		 sc_reset_task;
 	int			 sc_resetting;
 
-        uint32_t                 sc_tx_itr;
-        uint32_t                 sc_rx_itr;
 	unsigned int		 sc_tx_ring_ndescs;
 	unsigned int		 sc_rx_ring_ndescs;
 	unsigned int		 sc_nqueues;	/* 1 << sc_nqueues */
-        unsigned int             sc_nqueue_pairs;
-        unsigned int             sc_nqps_alloc;
-        unsigned int             sc_nqps_vsi;
-        unsigned int             sc_nqps_req;
-        unsigned int             sc_max_vectors;
 
 	struct intrmap		*sc_intrmap;
 	struct iavf_vector	*sc_vectors;
@@ -1001,9 +992,7 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_nqueues = 0; /* 1 << 0 is 1 queue */
 	sc->sc_tx_ring_ndescs = 1024;
 	sc->sc_rx_ring_ndescs = 1024;
-	sc->sc_tx_itr = 0x07a; /* 4K intrs/sec */
-	sc->sc_rx_itr = 0x07a; /* 4K intrs/sec */
-	sc->sc_nqps_req = ncpus;
+
 
 	memtype = pci_mapreg_type(sc->sc_pc, sc->sc_tag, IAVF_PCIREG);
 	if (pci_mapreg_map(pa, IAVF_PCIREG, memtype, 0,
@@ -2440,8 +2429,6 @@ iavf_process_vf_resources(struct iavf_softc *sc, struct iavf_aq_desc *desc,
 	/* is vsi type interesting? */
 
 	sc->sc_vf_id = letoh32(desc->iaq_param[0]);
-        sc->sc_max_vectors = le16toh(vf_res->max_vectors);
-        sc->sc_nqps_vsi = le16toh(vsi_res->num_queue_pairs);
 
 	memcpy(sc->sc_ac.ac_enaddr, vsi_res->default_mac, ETHER_ADDR_LEN);
 
