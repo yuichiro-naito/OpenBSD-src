@@ -826,7 +826,7 @@ static const struct iavf_aq_regs iavf_aq_regs = {
         iavf_flush((_s))
 
 #define iavf_nqueues(_sc)	(1 << (_sc)->sc_nqueues)
-#define iavf_allqueues(_sc)	((1 << ((_sc)->sc_nqueues+1)) - 1)
+#define iavf_allqueues(_sc)	((1 << (iavf_nqueues(_sc))) - 1)
 
 #ifdef __LP64__
 #define iavf_dmamem_hi(_ixm)	(uint32_t)(IAVF_DMA_DVA(_ixm) >> 32)
