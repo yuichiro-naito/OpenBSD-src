@@ -792,25 +792,21 @@ static const struct iavf_aq_regs iavf_aq_regs = {
 	bus_space_read_4((_s)->sc_memt, (_s)->sc_memh, (_r))
 #define iavf_wr(_s, _r, _v) \
 	bus_space_write_4((_s)->sc_memt, (_s)->sc_memh, (_r), (_v))
-#define iavf_flush(_s)  (void)iavf_rd((_s), I40E_VFGEN_RSTAT)
 #define iavf_barrier(_s, _r, _l, _o) \
 	bus_space_barrier((_s)->sc_memt, (_s)->sc_memh, (_r), (_l), (_o))
 #define iavf_intr_enable(_s) \
 	iavf_wr((_s), I40E_VFINT_DYN_CTL01, I40E_VFINT_DYN_CTL0_INTENA_MASK | \
 	    I40E_VFINT_DYN_CTL0_CLEARPBA_MASK | \
 	    (IAVF_NOITR << I40E_VFINT_DYN_CTL0_ITR_INDX_SHIFT)); \
-	iavf_wr((_s), I40E_VFINT_ICR0_ENA1, I40E_VFINT_ICR0_ENA1_ADMINQ_MASK);\
-	iavf_flush(_s)
+	iavf_wr((_s), I40E_VFINT_ICR0_ENA1, I40E_VFINT_ICR0_ENA1_ADMINQ_MASK)
 #define iavf_queue_intr_enable(_s, _q)					\
         iavf_wr((_s), I40E_VFINT_DYN_CTLN1((_q)),			\
 		I40E_VFINT_DYN_CTLN1_INTENA_MASK |			\
 		I40E_VFINT_DYN_CTLN1_CLEARPBA_MASK |			\
-		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT));	\
-        iavf_flush((_s))
+		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT))
 #define iavf_queue_intr_disable(_s, _q)					\
         iavf_wr((_s), I40E_VFINT_DYN_CTLN1((_q)),			\
-		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT));	\
-        iavf_flush((_s))
+		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT))
 
 #define iavf_nqueues(_sc)	(1 << (_sc)->sc_nqueues)
 #define iavf_allqueues(_sc)	((1 << (iavf_nqueues(_sc))) - 1)
