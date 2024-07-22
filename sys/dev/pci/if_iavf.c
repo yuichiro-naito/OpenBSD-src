@@ -643,7 +643,7 @@ struct iavf_softc {
 	struct ifmedia		 sc_media;
 	uint64_t		 sc_media_status;
 	uint64_t		 sc_media_active;
-        enum i40e_mac_type       sc_mac_type;
+	enum i40e_mac_type       sc_mac_type;
 
 	struct pci_attach_args  *sc_pa;
 	pci_chipset_tag_t	 sc_pc;
@@ -758,7 +758,6 @@ static int	iavf_rxeof(struct iavf_softc *, struct ifiqueue *);
 static void	iavf_rxfill(struct iavf_softc *, struct iavf_rx_ring *);
 static void	iavf_rxrefill(void *);
 static int	iavf_rxrinfo(struct iavf_softc *, struct if_rxrinfo *);
-
 
 struct cfdriver iavf_cd = {
 	NULL,
