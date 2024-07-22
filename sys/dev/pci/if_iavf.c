@@ -914,12 +914,6 @@ iavf_setup_interrupts(struct iavf_softc *sc)
 
 	for (i = 0; i < nqueues; i++) {
 		iv = &sc->sc_vectors[i];
-		iv->iv_rxr = iavf_rxr_alloc(sc, i);
-		iv->iv_txr = iavf_txr_alloc(sc, i);
-
-		if (iv->iv_rxr == NULL || iv->iv_txr == NULL)
-			goto free_vectors;
-
 		iv->iv_sc = sc;
 		iv->iv_qid = i;
 		snprintf(iv->iv_name, sizeof(iv->iv_name),
@@ -957,10 +951,6 @@ free_vectors:
 			struct iavf_vector *iv = &sc->sc_vectors[i];
 			if (iv->iv_ihc != NULL)
 				pci_intr_disestablish(sc->sc_pc, iv->iv_ihc);
-			if (iv->iv_rxr != NULL)
-				iavf_rxr_free(sc, iv->iv_rxr);
-			if (iv->iv_txr != NULL)
-				iavf_txr_free(sc, iv->iv_txr);
 		}
 	}
 	free(sc->sc_vectors, M_DEVBUF, nqueues * sizeof(*sc->sc_vectors));
@@ -1403,6 +1393,7 @@ iavf_up(struct iavf_softc *sc)
 	struct iavf_rx_ring *rxr;
 	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
+	int rv = ENOMEM;
 
 	nqueues = iavf_nqueues(sc);
 
@@ -1413,12 +1404,19 @@ iavf_up(struct iavf_softc *sc)
 	}
 
 	for (i = 0; i < nqueues; i++) {
-		iv = &sc->sc_vectors[i];
-		rxr = iv->iv_rxr;
-		txr = iv->iv_txr;
+		rxr = iavf_rxr_alloc(sc, i);
+		if (rxr == NULL)
+			goto free;
 
-		ifp->if_iqs[i]->ifiq_softc = rxr;
-		ifp->if_ifqs[i]->ifq_softc = txr;
+		txr = iavf_txr_alloc(sc, i);
+		if (txr == NULL) {
+			iavf_rxr_free(sc, rxr);
+			goto free;
+		}
+
+		iv = &sc->sc_vectors[i];
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = rxr;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = txr;
 		rxr->rxr_ifiq = ifp->if_iqs[i];
 		txr->txr_ifq = ifp->if_ifqs[i];
 
@@ -1448,6 +1446,27 @@ iavf_up(struct iavf_softc *sc)
 
 	return (ENETRESET);
 
+free:
+	for (i = 0; i < nqueues; i++) {
+		rxr = ifp->if_iqs[i]->ifiq_softc;
+		txr = ifp->if_ifqs[i]->ifq_softc;
+
+		if (rxr == NULL) {
+			/*
+			 * tx and rx get set at the same time, so if one
+			 * is NULL, the other is too.
+			 */
+			continue;
+		}
+
+		iavf_txr_free(sc, txr);
+		iavf_rxr_free(sc, rxr);
+		iv = &sc->sc_vectors[i];
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = NULL;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = NULL;
+	}
+	rw_exit_write(&sc->sc_cfg_lock);
+	return (rv);
 down:
 	rw_exit_write(&sc->sc_cfg_lock);
 	iavf_down(sc);
@@ -1615,10 +1634,11 @@ iavf_down(struct iavf_softc *sc)
 		iavf_txr_clean(sc, txr);
 		iavf_rxr_clean(sc, rxr);
 
-		ifp->if_iqs[i]->ifiq_softc = NULL;
-		ifp->if_ifqs[i]->ifq_softc =  NULL;
-		rxr->rxr_ifiq = NULL;
-		txr->txr_ifq = NULL;
+		iavf_txr_free(sc, txr);
+		iavf_rxr_free(sc, rxr);
+
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = NULL;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc =  NULL;
 	}
 
 	/* unmask */
@@ -2199,7 +2219,7 @@ iavf_rxeof(struct iavf_softc *sc, struct ifiqueue *ifiq)
 		bus_dmamap_sync(sc->sc_dmat, map, 0, map->dm_mapsize,
 		    BUS_DMASYNC_POSTREAD);
 		bus_dmamap_unload(sc->sc_dmat, map);
-
+		
 		m = rxm->rxm_m;
 		rxm->rxm_m = NULL;
 
@@ -2768,8 +2788,7 @@ iavf_config_irq_map(struct iavf_softc *sc)
 	struct iavf_aq_desc iaq;
 	struct iavf_vc_vector_map *vec;
 	struct iavf_vc_irq_map_info *map;
-	struct iavf_rx_ring *rxr;
-	struct iavf_tx_ring *txr;
+	struct iavf_vector *iv;
 	unsigned int num_vec = 0;
 	int tries;
 
@@ -2792,12 +2811,11 @@ iavf_config_irq_map(struct iavf_softc *sc)
 		num_vec++;
 	} else if (sc->sc_nintrs > 1) {
 		for (; num_vec < sc->sc_nintrs - 1; num_vec++) {
-			rxr = sc->sc_vectors[num_vec].iv_rxr;
-			txr = sc->sc_vectors[num_vec].iv_txr;
+			iv = &sc->sc_vectors[num_vec];
 			vec[num_vec].vsi_id = htole16(sc->sc_vsi_id);
 			vec[num_vec].vector_id = htole16(num_vec + 1);
-			vec[num_vec].rxq_map = htole16(1 << rxr->rxr_qid);
-			vec[num_vec].txq_map = htole16(1 << txr->txr_qid);
+			vec[num_vec].rxq_map = htole16(1 << iv->iv_qid);
+			vec[num_vec].txq_map = htole16(1 << iv->iv_qid);
 			vec[num_vec].rxitr_idx = htole16(IAVF_ITR_RX);
 			vec[num_vec].txitr_idx = htole16(IAVF_ITR_TX);
 		}
