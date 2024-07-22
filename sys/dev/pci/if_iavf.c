@@ -1424,9 +1424,8 @@ iavf_up(struct iavf_softc *sc)
 	if (iavf_queue_select(sc, IAVF_VC_OP_ENABLE_QUEUES) != 0)
 		goto down;
 
-	for (i = 0; i < nqueues; i++) {
+	for (i = 0; i < nqueues; i++)
 		iavf_queue_intr_enable(sc, i);
-	}
 
 	SET(ifp->if_flags, IFF_RUNNING);
 
