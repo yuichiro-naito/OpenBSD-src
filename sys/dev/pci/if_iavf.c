@@ -80,6 +80,10 @@
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcidevs.h>
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64
+#endif
+
 #define I40E_MASK(mask, shift)		((mask) << (shift))
 #define I40E_AQ_LARGE_BUF		512
 
@@ -526,6 +530,7 @@ struct iavf_tx_map {
 struct iavf_tx_ring {
 	unsigned int		 txr_prod;
 	unsigned int		 txr_cons;
+	struct ifqueue		*txr_ifq;
 
 	struct iavf_tx_map	*txr_maps;
 	struct iavf_dmamem	 txr_mem;
@@ -541,6 +546,7 @@ struct iavf_rx_map {
 
 struct iavf_rx_ring {
 	struct iavf_softc	*rxr_sc;
+	struct ifiqueue		*rxr_ifiq;
 
 	struct if_rxring	 rxr_acct;
 	struct timeout		 rxr_refill;
@@ -557,6 +563,15 @@ struct iavf_rx_ring {
 	bus_size_t		 rxr_tail;
 	unsigned int		 rxr_qid;
 };
+
+struct iavf_vector {
+	struct iavf_softc	*iv_sc;
+	struct iavf_rx_ring	*iv_rxr;
+	struct iavf_tx_ring	*iv_txr;
+	int			 iv_qid;
+	void			*iv_ihc;
+	char			 iv_name[16];
+} __aligned(CACHE_LINE_SIZE);
 
 struct iavf_softc {
 	struct device		 sc_dev;
@@ -613,6 +628,8 @@ struct iavf_softc {
 	unsigned int		 sc_rx_ring_ndescs;
 	unsigned int		 sc_nqueues;	/* 1 << sc_nqueues */
 
+	struct iavf_vector	*sc_vectors;
+
 	struct rwlock		 sc_cfg_lock;
 	unsigned int		 sc_dead;
 
@@ -644,6 +661,7 @@ static int	iavf_add_del_addr(struct iavf_softc *, uint8_t *, int);
 static int	iavf_process_arq(struct iavf_softc *, int);
 
 static int	iavf_match(struct device *, void *, void *);
+static int	iavf_setup_interrupts(struct iavf_softc *);
 static void	iavf_attach(struct device *, struct device *, void *);
 
 static int	iavf_media_change(struct ifnet *);
@@ -755,6 +773,38 @@ static int
 iavf_match(struct device *parent, void *match, void *aux)
 {
 	return (pci_matchbyid(aux, iavf_devices, nitems(iavf_devices)));
+}
+
+static int
+iavf_setup_interrupts(struct iavf_softc *sc)
+{
+	unsigned int i, nqueues = iavf_nqueues(sc);
+	struct iavf_vector *iv;
+
+	sc->sc_ihc = pci_intr_establish(sc->sc_pc, sc->sc_ih,
+	    IPL_NET | IPL_MPSAFE, iavf_intr, sc, DEVNAME(sc));
+	if (sc->sc_ihc == NULL) {
+		printf("%s: unable to establish interrupt handler\n",
+		    DEVNAME(sc));
+		return -1;
+	}
+
+	sc->sc_vectors = mallocarray(sizeof(*sc->sc_vectors), nqueues,
+	    M_DEVBUF, M_WAITOK|M_CANFAIL|M_ZERO);
+	if (sc->sc_vectors == NULL) {
+		printf("%s: unable to allocate vectors\n", DEVNAME(sc));
+		return -1;
+	}
+
+	for (i = 0; i < nqueues; i++) {
+		iv = &sc->sc_vectors[i];
+		iv->iv_sc = sc;
+		iv->iv_qid = i;
+		snprintf(iv->iv_name, sizeof(iv->iv_name), "%s:%u",
+			 DEVNAME(sc), i);
+	}
+
+	return 0;
 }
 
 void
@@ -871,9 +921,7 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	printf(", %s, address %s\n", pci_intr_string(sc->sc_pc, sc->sc_ih),
 	    ether_sprintf(sc->sc_ac.ac_enaddr));
 
-	sc->sc_ihc = pci_intr_establish(sc->sc_pc, sc->sc_ih,
-	    IPL_NET | IPL_MPSAFE, iavf_intr, sc, DEVNAME(sc));
-	if (sc->sc_ihc == NULL) {
+	if (iavf_setup_interrupts(sc) != 0) {
 		printf("%s: unable to establish interrupt handler\n",
 		    DEVNAME(sc));
 		goto free_scratch;
@@ -1170,6 +1218,7 @@ static int
 iavf_up(struct iavf_softc *sc)
 {
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	struct iavf_vector  *iv;
 	struct iavf_rx_ring *rxr;
 	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
@@ -1195,8 +1244,11 @@ iavf_up(struct iavf_softc *sc)
 			goto free;
 		}
 
-		ifp->if_iqs[i]->ifiq_softc = rxr;
-		ifp->if_ifqs[i]->ifq_softc = txr;
+		iv = &sc->sc_vectors[i];
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = rxr;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = txr;
+		rxr->rxr_ifiq = ifp->if_iqs[i];
+		txr->txr_ifq = ifp->if_ifqs[i];
 
 		iavf_rxfill(sc, rxr);
 	}
@@ -1235,6 +1287,9 @@ free:
 
 		iavf_txr_free(sc, txr);
 		iavf_rxr_free(sc, rxr);
+		iv = &sc->sc_vectors[i];
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = NULL;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = NULL;
 	}
 	rw_exit_write(&sc->sc_cfg_lock);
 	return (rv);
@@ -1357,6 +1412,7 @@ static int
 iavf_down(struct iavf_softc *sc)
 {
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	struct iavf_vector  *iv;
 	struct iavf_rx_ring *rxr;
 	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
@@ -1395,8 +1451,9 @@ iavf_down(struct iavf_softc *sc)
 	}
 
 	for (i = 0; i < nqueues; i++) {
-		rxr = ifp->if_iqs[i]->ifiq_softc;
-		txr = ifp->if_ifqs[i]->ifq_softc;
+		iv = &sc->sc_vectors[i];
+		txr = iv->iv_txr;
+		rxr = iv->iv_rxr;
 
 		iavf_txr_clean(sc, txr);
 		iavf_rxr_clean(sc, rxr);
@@ -1404,8 +1461,8 @@ iavf_down(struct iavf_softc *sc)
 		iavf_txr_free(sc, txr);
 		iavf_rxr_free(sc, rxr);
 
-		ifp->if_iqs[i]->ifiq_softc = NULL;
-		ifp->if_ifqs[i]->ifq_softc =  NULL;
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = NULL;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc =  NULL;
 	}
 
 	/* unmask */
