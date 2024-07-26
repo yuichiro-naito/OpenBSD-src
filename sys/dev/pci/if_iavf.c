@@ -97,6 +97,7 @@
 #define IAVF_VFR_VFACTIVE		2
 
 #include <dev/pci/if_ixlreg.h>
+#include <dev/pci/if_ixlvar.h>
 
 struct iavf_aq_desc {
 	uint16_t	iaq_flags;
@@ -576,12 +577,21 @@ struct iavf_vector {
 	char			 iv_name[16];
 } __aligned(CACHE_LINE_SIZE);
 
+enum i40e_mac_type {
+        I40E_MAC_XL710,
+        I40E_MAC_X722,
+        I40E_MAC_X722_VF,
+        I40E_MAC_VF,
+        I40E_MAC_GENERIC
+};
+
 struct iavf_softc {
 	struct device		 sc_dev;
 	struct arpcom		 sc_ac;
 	struct ifmedia		 sc_media;
 	uint64_t		 sc_media_status;
 	uint64_t		 sc_media_active;
+	enum i40e_mac_type       sc_mac_type;
 
 	pci_chipset_tag_t	 sc_pc;
 	pci_intr_handle_t	 sc_ih;
@@ -658,6 +668,7 @@ static void	iavf_atq_done(struct iavf_softc *);
 
 static void	iavf_init_admin_queue(struct iavf_softc *);
 
+static enum i40e_mac_type iavf_mactype(pci_product_id_t);
 static int	iavf_get_version(struct iavf_softc *);
 static int	iavf_get_vf_resources(struct iavf_softc *);
 static int	iavf_config_irq_map(struct iavf_softc *);
@@ -789,6 +800,21 @@ iavf_match(struct device *parent, void *match, void *aux)
 	return (pci_matchbyid(aux, iavf_devices, nitems(iavf_devices)));
 }
 
+static enum i40e_mac_type
+iavf_mactype(pci_product_id_t id)
+{
+
+        switch (id) {
+        case PCI_PRODUCT_INTEL_XL710_VF:
+        case PCI_PRODUCT_INTEL_XL710_VF_HV:
+                return I40E_MAC_VF;
+        case PCI_PRODUCT_INTEL_X722_VF:
+                return I40E_MAC_X722_VF;
+        }
+
+        return I40E_MAC_GENERIC;
+}
+
 static int
 iavf_intr_vector(void *v)
 {
@@ -891,6 +917,8 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_tag = pa->pa_tag;
 	sc->sc_dmat = pa->pa_dmat;
 	sc->sc_aq_regs = &iavf_aq_regs;
+
+	sc->sc_mac_type = iavf_mactype(PCI_PRODUCT(pa->pa_id));
 
 	sc->sc_nqueues = 0; /* 1 << 0 is 1 queue */
 	sc->sc_tx_ring_ndescs = 1024;
@@ -1251,7 +1279,8 @@ iavf_config_hena(struct iavf_softc *sc)
 	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
 
 	caps = IAVF_DMA_KVA(&sc->sc_scratch);
-	*caps = 0;
+	*caps = (sc->sc_mac_type == I40E_MAC_X722_VF) ? IXL_RSS_HENA_BASE_722 :
+		IXL_RSS_HENA_BASE_710;
 
 	iavf_atq_post(sc, &iaq);
 	rv = iavf_arq_wait(sc, 250);
