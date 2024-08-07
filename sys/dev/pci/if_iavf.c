@@ -82,6 +82,8 @@
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcidevs.h>
 
+#define IAVF_MAX_DMA_SEG_SIZE		((16 * 1024) - 1)
+
 #define I40E_MASK(mask, shift)		((mask) << (shift))
 #define I40E_AQ_LARGE_BUF		512
 
@@ -387,6 +389,10 @@ struct iavf_tx_desc {
 #define IAVF_TX_DESC_BSIZE_MAX		0x3fffULL
 #define IAVF_TX_DESC_BSIZE_MASK		\
 	(IAVF_TX_DESC_BSIZE_MAX << IAVF_TX_DESC_BSIZE_SHIFT)
+
+#define IAVF_TX_CTX_DESC_CMD_TSO	0x10
+#define IAVF_TX_CTX_DESC_TLEN_SHIFT	30
+#define IAVF_TX_CTX_DESC_MSS_SHIFT	50
 
 #define IAVF_TX_DESC_L2TAG1_SHIFT	48
 #define IAVF_TX_DESC_L2TAG1_MASK	(0xffff << IAVF_TX_DESC_L2TAG1_SHIFT)
@@ -899,6 +905,7 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	ifp->if_capabilities |= IFCAP_CSUM_IPv4 |
 	    IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4 |
 	    IFCAP_CSUM_TCPv6 | IFCAP_CSUM_UDPv6;
+	ifp->if_capabilities |= IFCAP_TSOv4 | IFCAP_TSOv6;
 
 	ifmedia_init(&sc->sc_media, 0, iavf_media_change, iavf_media_status);
 
@@ -1565,7 +1572,7 @@ iavf_txr_alloc(struct iavf_softc *sc, unsigned int qid)
 		txm = &maps[i];
 
 		if (bus_dmamap_create(sc->sc_dmat,
-		    IAVF_HARDMTU, IAVF_TX_PKT_DESCS, IAVF_HARDMTU, 0,
+		    MAXMCLBYTES, IAVF_TX_PKT_DESCS, IAVF_MAX_DMA_SEG_SIZE, 0,
 		    BUS_DMA_WAITOK | BUS_DMA_ALLOCNOW | BUS_DMA_64BIT,
 		    &txm->txm_map) != 0)
 			goto uncreate;
@@ -1708,6 +1715,32 @@ iavf_tx_offload(struct mbuf *m)
 		    << IAVF_TX_DESC_L4LEN_SHIFT;
 	}
 
+	if (ISSET(m0->m_pkthdr.csum_flags, M_TCP_TSO)) {
+		if (ext.tcp && m0->m_pkthdr.ph_mss > 0) {
+			struct iavf_tx_desc *ring, *txd;
+			uint64_t cmd = 0, paylen, outlen;
+
+			hlen += ext.tcphlen;
+
+			/*
+			 * The MSS should not be set to a lower value than 64
+			 * or larger than 9668 bytes.
+			 */
+			outlen = MIN(9668, MAX(64, m0->m_pkthdr.ph_mss));
+			paylen = m0->m_pkthdr.len - ETHER_HDR_LEN - hlen;
+			ring = IAVF_DMA_KVA(&txr->txr_mem);
+			txd = &ring[prod];
+
+			cmd |= IAVF_TX_DESC_DTYPE_CONTEXT;
+			cmd |= IAVF_TX_CTX_DESC_CMD_TSO;
+			cmd |= paylen << IAVF_TX_CTX_DESC_TLEN_SHIFT;
+			cmd |= outlen << IAVF_TX_CTX_DESC_MSS_SHIFT;
+
+			htolem64(&txd->addr, 0);
+			htolem64(&txd->cmd, cmd);
+		}
+	}
+
 	return offload;
 }
 
@@ -1748,7 +1781,8 @@ iavf_start(struct ifqueue *ifq)
 	mask = sc->sc_tx_ring_ndescs - 1;
 
 	for (;;) {
-		if (free <= IAVF_TX_PKT_DESCS) {
+		/* We need one extra descriptor for TSO packets. */
+		if (free <= (IAVF_TX_PKT_DESCS + 1)) {
 			ifq_set_oactive(ifq);
 			break;
 		}
@@ -1761,6 +1795,12 @@ iavf_start(struct ifqueue *ifq)
 
 		txm = &txr->txr_maps[prod];
 		map = txm->txm_map;
+
+		if (ISSET(m->m_pkthdr.csum_flags, M_TCP_TSO)) {
+			prod++;
+			prod &= mask;
+			free--;
+		}
 
 		if (iavf_load_mbuf(sc->sc_dmat, map, m) != 0) {
 			ifq->ifq_errors++;
