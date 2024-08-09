@@ -1420,7 +1420,7 @@ iavf_config_promisc_mode(struct iavf_softc *sc, int unicast, int multicast)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, 3000);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: CONFIG_PROMISC_MODE failed: %d\n", DEVNAME(sc), rv);
 		return (1);
