@@ -79,7 +79,7 @@ bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
       return true;
 #define PCBREG(x, offset)			\
     case lldb_##x##_x86_64:			\
-      value = pcb.pcb_##x + offset;		\
+      value = pcb.pcb_##x + (offset);		\
       return true;
     switch (reg) {
       SFREG(r15);
