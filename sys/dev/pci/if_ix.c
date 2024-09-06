@@ -3247,8 +3247,6 @@ ixgbe_rxeof(struct ix_rxring *rxr)
 			mp->m_next = nxbuf->buf;
 		} else { /* Sending this frame? */
 			ixgbe_rx_offload(staterr, vtag, sendmp);
-			rxr->packets++;
-			rxr->bytes += sendmp->m_pkthdr.len;
 			if (hashtype != IXGBE_RXDADV_RSSTYPE_NONE) {
 				sendmp->m_pkthdr.ph_flowid = hash;
 				SET(sendmp->m_pkthdr.csum_flags, M_FLOWID);
