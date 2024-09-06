@@ -97,8 +97,8 @@ int	ixgbe_setup_transmit_structures(struct ix_softc *);
 int	ixgbe_setup_receive_structures(struct ix_softc *);
 void	ixgbe_free_transmit_structures(struct ix_softc *);
 void	ixgbe_free_receive_structures(struct ix_softc *);
-int	ixgbe_txeof(struct tx_ring *);
-int	ixgbe_rxeof(struct rx_ring *);
+int	ixgbe_txeof(struct ix_txring *);
+int	ixgbe_rxeof(struct ix_rxring *);
 void	ixgbe_rxrefill(void *);
 void    ixgbe_update_link_status(struct ix_softc *);
 int     ixgbe_allocate_pci_resources(struct ix_softc *);
@@ -111,8 +111,8 @@ int	ixgbe_rxrinfo(struct ix_softc *, struct if_rxrinfo *);
 
 #if NKSTAT > 0
 static void	ixv_kstats(struct ix_softc *);
-static void	ixv_rxq_kstats(struct ix_softc *, struct rx_ring *);
-static void	ixv_txq_kstats(struct ix_softc *, struct tx_ring *);
+static void	ixv_rxq_kstats(struct ix_softc *, struct ix_rxring *);
+static void	ixv_txq_kstats(struct ix_softc *, struct ix_txring *);
 static void	ixv_kstats_tick(void *);
 #endif
 
@@ -381,7 +381,7 @@ static void
 ixv_watchdog(struct ifnet * ifp)
 {
 	struct ix_softc *sc = (struct ix_softc *)ifp->if_softc;
-	struct tx_ring *txr = sc->tx_rings;
+	struct ix_txring *txr = sc->tx_rings;
 	struct ixgbe_hw *hw = &sc->hw;
 	int		tx_hang = FALSE;
 	int		i;
@@ -561,8 +561,8 @@ ixv_msix_que(void *arg)
 	struct ix_queue *que = arg;
 	struct ix_softc *sc = que->sc;
 	struct ifnet    *ifp = &sc->arpcom.ac_if;
-	struct tx_ring  *txr = que->txr;
-	struct rx_ring  *rxr = que->rxr;
+	struct ix_txring  *txr = que->txr;
+	struct ix_rxring  *rxr = que->rxr;
 
 	if ((ifp->if_flags & IFF_RUNNING) == 0)
 		return 1;
@@ -804,8 +804,8 @@ ixv_setup_interface(struct device *dev, struct ix_softc *sc)
 	for (i = 0; i < sc->num_queues; i++) {
 		struct ifqueue *ifq = ifp->if_ifqs[i];
 		struct ifiqueue *ifiq = ifp->if_iqs[i];
-		struct tx_ring *txr = &sc->tx_rings[i];
-		struct rx_ring *rxr = &sc->rx_rings[i];
+		struct ix_txring *txr = &sc->tx_rings[i];
+		struct ix_rxring *rxr = &sc->rx_rings[i];
 
 		ifq->ifq_softc = txr;
 		txr->ifq = ifq;
@@ -829,7 +829,7 @@ static void
 ixv_initialize_transmit_units(struct ix_softc *sc)
 {
         struct ifnet    *ifp = &sc->arpcom.ac_if;
-	struct tx_ring  *txr;
+	struct ix_txring  *txr;
 	struct ixgbe_hw *hw = &sc->hw;
 	uint64_t tdba;
 	uint32_t txctrl, txdctl;
@@ -941,7 +941,7 @@ ixv_initialize_rss_mapping(struct ix_softc *sc)
 static void
 ixv_initialize_receive_units(struct ix_softc *sc)
 {
-	struct rx_ring  *rxr = sc->rx_rings;
+	struct ix_rxring  *rxr = sc->rx_rings;
 	struct ixgbe_hw *hw = &sc->hw;
 	uint64_t         rdba;
 	uint32_t         reg, rxdctl, bufsz, psrtype;
@@ -1424,7 +1424,7 @@ ixv_kstats(struct ix_softc *sc)
 }
 
 static void
-ixv_rxq_kstats(struct ix_softc *sc, struct rx_ring *rxr)
+ixv_rxq_kstats(struct ix_softc *sc, struct ix_rxring *rxr)
 {
 	struct ixv_rxq_kstats *stats;
 	struct kstat *ks;
@@ -1448,7 +1448,7 @@ ixv_rxq_kstats(struct ix_softc *sc, struct rx_ring *rxr)
 }
 
 static void
-ixv_txq_kstats(struct ix_softc *sc, struct tx_ring *txr)
+ixv_txq_kstats(struct ix_softc *sc, struct ix_txring *txr)
 {
 	struct ixv_txq_kstats *stats;
 	struct kstat *ks;
@@ -1538,7 +1538,7 @@ int
 ixv_rxq_kstats_read(struct kstat *ks)
 {
 	struct ixv_rxq_kstats *stats = ks->ks_data;
-	struct rx_ring *rxr = ks->ks_softc;
+	struct ix_rxring *rxr = ks->ks_softc;
 	struct ix_softc *sc = rxr->sc;
 	struct ixgbe_hw	*hw = &sc->hw;
 	uint32_t i = rxr->me;
@@ -1557,7 +1557,7 @@ int
 ixv_txq_kstats_read(struct kstat *ks)
 {
 	struct ixv_txq_kstats *stats = ks->ks_data;
-	struct tx_ring *txr = ks->ks_softc;
+	struct ix_txring *txr = ks->ks_softc;
 	struct ix_softc *sc = txr->sc;
 	struct ixgbe_hw	*hw = &sc->hw;
 	uint32_t i = txr->me;
