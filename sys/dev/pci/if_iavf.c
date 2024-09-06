@@ -892,6 +892,11 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	int nmsix, tries;
 	unsigned int nqueues;
 
+	if ((pa->pa_flags & PCI_FLAGS_MSI_ENABLED) == 0) {
+		printf(" msix disabled!\n");
+		return;
+	}
+
 	rw_init(&sc->sc_cfg_lock, "iavfcfg");
 
 	sc->sc_pc = pa->pa_pc;
