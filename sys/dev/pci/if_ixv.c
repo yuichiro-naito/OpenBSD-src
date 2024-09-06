@@ -201,6 +201,11 @@ ixv_attach(struct device *parent, struct device *self, void *aux)
 
 	INIT_DEBUGOUT("ixv_attach: begin");
 
+	if ((pa->pa_flags & PCI_FLAGS_MSI_ENABLED) == 0) {
+		printf(" msix disabled!\n");
+		return;
+	}
+
 	sc->osdep.os_sc = sc;
 	sc->osdep.os_pa = *pa;
 
