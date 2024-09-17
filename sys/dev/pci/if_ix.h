@@ -116,6 +116,8 @@
 #define IXGBE_BR_SIZE			4096
 #define IXGBE_QUEUE_MIN_FREE		32
 
+#define IXGBE_EITR_DEFAULT              128
+
 /*
  * Interrupt Moderation parameters
  */
@@ -169,6 +171,7 @@ struct ix_txring {
 	struct ix_softc		*sc;
 	struct ifqueue		*ifq;
 	uint32_t		me;
+	uint32_t		tail;
 	uint32_t		watchdog_timer;
 	union ixgbe_adv_tx_desc	*tx_base;
 	struct ixgbe_tx_buf	*tx_buffers;
@@ -194,6 +197,7 @@ struct ix_rxring {
 	struct ix_softc		*sc;
 	struct ifiqueue		*ifiq;
 	uint32_t		me;
+	uint32_t		tail;
 	union ixgbe_adv_rx_desc	*rx_base;
 	struct ixgbe_dma_alloc	rxdma;
 #if 0
@@ -244,6 +248,7 @@ struct ix_softc {
 	uint16_t		num_segs;
 	uint32_t		link_speed;
 	bool			link_up;
+	bool			link_enabled;
 	uint32_t		linkvec;
 	struct rwlock		sfflock;
 
