@@ -170,6 +170,31 @@ void
 pci_attach_hook(struct device *parent, struct device *self,
     struct pcibus_attach_args *pba)
 {
+	pci_chipset_tag_t pc = pba->pba_pc;
+	pcitag_t tag;
+	pcireg_t id, class;
+
+	if (pba->pba_bus != 0)
+		return;
+
+	tag = pci_make_tag(pc, 0, 0, 0);
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
+	class = pci_conf_read(pc, tag, PCI_CLASS_REG);
+
+	if (PCI_CLASS(class) != PCI_CLASS_BRIDGE ||
+	    PCI_SUBCLASS(class) != PCI_SUBCLASS_BRIDGE_HOST)
+		return;
+
+	/*
+	 * QEMU uses the old chipset i440fx by default, but it can use
+	 * MSI/MSI-X interrupt. We cannot know if MSI/MISX is available
+	 * from the ACPI table. Because it's quite old style (revision 1).
+	 */
+	if ((cpu_ecxfeature & CPUIDECX_HV) &&
+	    PCI_VENDOR(id) == PCI_VENDOR_INTEL &&
+	    PCI_PRODUCT(id) == PCI_PRODUCT_INTEL_82441FX) {
+		pba->pba_flags |= PCI_FLAGS_MSI_ENABLED;
+	}
 }
 
 int
