@@ -1,4 +1,4 @@
-.\"	$OpenBSD: sysupgrade.8,v 1.14 2024/09/05 06:39:54 jmc Exp $
+.\"	$OpenBSD: sysupgrade.8,v 1.18 2024/09/25 16:26:37 florian Exp $
 .\"
 .\" Copyright (c) 2019 Florian Obser <florian@openbsd.org>
 .\"
@@ -14,7 +14,7 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate: September 5 2024 $
+.Dd $Mdocdate: September 25 2024 $
 .Dt SYSUPGRADE 8
 .Os
 .Sh NAME
@@ -22,15 +22,15 @@
 .Nd upgrade system to the next release or a new snapshot
 .Sh SYNOPSIS
 .Nm
-.Op Fl fkn
-.Op Fl r | s
+.Op Fl fkns
 .Op Fl b Ar base-directory
+.Op Fl R Ar version
 .Op Ar installurl
 .Sh DESCRIPTION
 .Nm
 is a utility to upgrade
 .Ox
-to the next release or a new snapshot if available.
+to a new release or snapshot if available.
 .Pp
 .Nm
 downloads the necessary files to
@@ -55,8 +55,7 @@ Download files to
 instead of
 .Pa /home/_sysupgrade .
 .It Fl f
-Force an already applied upgrade.
-The default is to upgrade to latest snapshot only if available.
+For snapshots, force an already applied upgrade.
 This option has no effect on releases.
 .It Fl k
 Keep the files in
@@ -66,12 +65,14 @@ By default they will be deleted after the upgrade.
 Fetch and verify the files and create
 .Pa /bsd.upgrade
 but do not reboot.
-.It Fl r
-Upgrade to the next release.
-This is the default if the system is currently running a release.
+.It Fl R Ar version
+Upgrade to a specific release version.
+Only upgrades from one version to the next are tested.
+Skipping versions may work.
+Downgrading is unlikely to work.
 .It Fl s
 Upgrade to a snapshot.
-This is the default if the system is currently running a snapshot.
+The default is to upgrade to the next release.
 .El
 .Pp
 See
