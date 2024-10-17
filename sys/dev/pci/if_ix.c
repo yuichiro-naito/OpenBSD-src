@@ -508,7 +508,7 @@ ixgbe_start(struct ifqueue *ifq)
 	 * hardware that this frame is available to transmit.
 	 */
 	if (post)
-		IXGBE_WRITE_REG(&sc->hw, IXGBE_TDT(txr->me),
+		IXGBE_WRITE_REG(&sc->hw, txr->tail,
 		    txr->next_avail_desc);
 }
 
@@ -706,7 +706,7 @@ ixgbe_watchdog(struct ifnet * ifp)
 	for (i = 0; i < sc->num_queues; i++, txr++) {
 		printf("%s: Queue(%d) tdh = %d, hw tdt = %d\n", ifp->if_xname, i,
 		    IXGBE_READ_REG(hw, IXGBE_TDH(i)),
-		    IXGBE_READ_REG(hw, IXGBE_TDT(i)));
+		    IXGBE_READ_REG(hw, sc->tx_rings[i].tail));
 		printf("%s: TX(%d) Next TX to Clean = %d\n", ifp->if_xname,
 		    i, txr->next_to_clean);
 	}
@@ -826,7 +826,7 @@ ixgbe_init(void *arg)
 				msec_delay(1);
 		}
 		IXGBE_WRITE_FLUSH(&sc->hw);
-		IXGBE_WRITE_REG(&sc->hw, IXGBE_RDT(i), rxr->last_desc_filled);
+		IXGBE_WRITE_REG(&sc->hw, rxr[i].tail, rxr->last_desc_filled);
 	}
 
 	/* Set up VLAN support and filter */
@@ -2365,9 +2365,12 @@ ixgbe_initialize_transmit_units(struct ix_softc *sc)
 		IXGBE_WRITE_REG(hw, IXGBE_TDLEN(i),
 		    sc->num_tx_desc * sizeof(struct ixgbe_legacy_tx_desc));
 
+		/* Set Tx Tail register */
+		txr->tail = IXGBE_TDT(i);
+
 		/* Setup the HW Tx Head and Tail descriptor pointers */
 		IXGBE_WRITE_REG(hw, IXGBE_TDH(i), 0);
-		IXGBE_WRITE_REG(hw, IXGBE_TDT(i), 0);
+		IXGBE_WRITE_REG(hw, txr->tail, 0);
 
 		/* Setup Transmit Descriptor Cmd Settings */
 		txr->txd_cmd = IXGBE_TXD_CMD_IFCS;
@@ -2844,7 +2847,7 @@ ixgbe_rxrefill(void *xrxr)
 
 	if (ixgbe_rxfill(rxr)) {
 		/* Advance the Rx Queue "Tail Pointer" */
-		IXGBE_WRITE_REG(&sc->hw, IXGBE_RDT(rxr->me),
+		IXGBE_WRITE_REG(&sc->hw, rxr->tail,
 		    rxr->last_desc_filled);
 	} else if (if_rxr_inuse(&rxr->rx_ring) == 0)
 		timeout_add(&rxr->rx_refill, 1);
@@ -2940,6 +2943,9 @@ ixgbe_initialize_receive_units(struct ix_softc *sc)
 		srrctl = bufsz | IXGBE_SRRCTL_DESCTYPE_ADV_ONEBUF;
 		IXGBE_WRITE_REG(hw, IXGBE_SRRCTL(i), srrctl);
 
+		/* Capture Rx Tail index */
+		rxr->tail = IXGBE_RDT(i);
+
 		if (ISSET(ifp->if_xflags, IFXF_LRO)) {
 			rdrxctl = IXGBE_READ_REG(&sc->hw, IXGBE_RSCCTL(i));
 
@@ -2952,7 +2958,7 @@ ixgbe_initialize_receive_units(struct ix_softc *sc)
 
 		/* Setup the HW Rx Head and Tail Descriptor Pointers */
 		IXGBE_WRITE_REG(hw, IXGBE_RDH(i), 0);
-		IXGBE_WRITE_REG(hw, IXGBE_RDT(i), 0);
+		IXGBE_WRITE_REG(hw, rxr->tail, 0);
 	}
 
 	if (sc->hw.mac.type != ixgbe_mac_82598EB) {
@@ -3241,7 +3247,6 @@ ixgbe_rxeof(struct ix_rxring *rxr)
 			mp->m_next = nxbuf->buf;
 		} else { /* Sending this frame? */
 			ixgbe_rx_offload(staterr, vtag, sendmp);
-
 			if (hashtype != IXGBE_RXDADV_RSSTYPE_NONE) {
 				sendmp->m_pkthdr.ph_flowid = hash;
 				SET(sendmp->m_pkthdr.csum_flags, M_FLOWID);
