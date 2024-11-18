@@ -98,6 +98,8 @@
 #define IAVF_VFR_COMPLETED		1
 #define IAVF_VFR_VFACTIVE		2
 
+#define IAVF_EXEC_TIMEOUT               3000
+
 #include <dev/pci/if_ixlreg.h>
 #include <dev/pci/if_ixlvar.h>
 
@@ -1266,7 +1268,7 @@ iavf_config_vsi_queues(struct iavf_softc *sc)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: CONFIG_VSI_QUEUES failed: %d\n", DEVNAME(sc), rv);
 		return (1);
@@ -1294,7 +1296,7 @@ iavf_config_hena(struct iavf_softc *sc)
 		IXL_RSS_HENA_BASE_710;
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: SET_RSS_HENA failed: %d\n", DEVNAME(sc), rv);
 		return (1);
@@ -1329,7 +1331,7 @@ iavf_queue_select(struct iavf_softc *sc, int opcode)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: queue op %d failed: %d\n", DEVNAME(sc), opcode, rv);
 		return (1);
@@ -1454,7 +1456,7 @@ iavf_config_promisc_mode(struct iavf_softc *sc, int unicast, int multicast)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 3000);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: CONFIG_PROMISC_MODE failed: %d\n", DEVNAME(sc), rv);
 		return (1);
@@ -1493,7 +1495,7 @@ iavf_add_del_addr(struct iavf_softc *sc, uint8_t *addr, int add)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: ADD/DEL_ETH_ADDR failed: %d\n", DEVNAME(sc), rv);
 		return (1);
