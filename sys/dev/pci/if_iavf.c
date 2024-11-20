@@ -49,6 +49,7 @@
  */
 
 #include "bpfilter.h"
+#include "vlan.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1064,9 +1065,13 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	strlcpy(ifp->if_xname, DEVNAME(sc), IFNAMSIZ);
 	ifq_init_maxlen(&ifp->if_snd, sc->sc_tx_ring_ndescs);
 
-	ifp->if_capabilities = IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING;
-	ifp->if_capabilities |= IFCAP_CSUM_IPv4 | IFCAP_CSUM_TCPv4 |
-		IFCAP_CSUM_UDPv4 | IFCAP_CSUM_UDPv6 | IFCAP_CSUM_TCPv6;
+	ifp->if_capabilities = IFCAP_VLAN_MTU;
+#if NVLAN > 0
+	ifp->if_capabilities |= IFCAP_VLAN_HWTAGGING;
+#endif
+	ifp->if_capabilities |= IFCAP_CSUM_IPv4 |
+	    IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4 |
+	    IFCAP_CSUM_TCPv6 | IFCAP_CSUM_UDPv6;
 	ifp->if_capabilities |= IFCAP_TSOv4 | IFCAP_TSOv6;
 
 	ifmedia_init(&sc->sc_media, 0, iavf_media_change, iavf_media_status);
@@ -1592,7 +1597,7 @@ iavf_down(struct iavf_softc *sc)
 		iavf_rxr_free(sc, rxr);
 
 		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = NULL;
-		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc =  NULL;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = NULL;
 	}
 
 	/* unmask */
@@ -1844,28 +1849,28 @@ iavf_load_mbuf(bus_dma_tag_t dmat, bus_dmamap_t map, struct mbuf *m)
 }
 
 static uint64_t
-iavf_tx_setup_offload(struct mbuf *m0, struct iavf_tx_ring *txr,
-    unsigned int prod)
+iavf_tx_offload(struct mbuf *m, struct iavf_tx_ring *txr, unsigned int prod)
 {
 	struct ether_extracted ext;
 	uint64_t hlen;
 	uint64_t offload = 0;
 
-
-	if (ISSET(m0->m_flags, M_VLANTAG)) {
-		uint64_t vtag = m0->m_pkthdr.ether_vtag;
+#if NVLAN > 0
+	if (ISSET(m->m_flags, M_VLANTAG)) {
+		uint64_t vtag = m->m_pkthdr.ether_vtag;
 		offload |= IAVF_TX_DESC_CMD_IL2TAG1;
 		offload |= vtag << IAVF_TX_DESC_L2TAG1_SHIFT;
 	}
+#endif
 
-	if (!ISSET(m0->m_pkthdr.csum_flags,
+	if (!ISSET(m->m_pkthdr.csum_flags,
 	    M_IPV4_CSUM_OUT|M_TCP_CSUM_OUT|M_UDP_CSUM_OUT|M_TCP_TSO))
 		return (offload);
 
-	ether_extract_headers(m0, &ext);
+	ether_extract_headers(m, &ext);
 
 	if (ext.ip4) {
-		offload |= ISSET(m0->m_pkthdr.csum_flags, M_IPV4_CSUM_OUT) ?
+		offload |= ISSET(m->m_pkthdr.csum_flags, M_IPV4_CSUM_OUT) ?
 		    IAVF_TX_DESC_CMD_IIPT_IPV4_CSUM :
 		    IAVF_TX_DESC_CMD_IIPT_IPV4;
 #ifdef INET6
@@ -1881,18 +1886,18 @@ iavf_tx_setup_offload(struct mbuf *m0, struct iavf_tx_ring *txr,
 	offload |= (ETHER_HDR_LEN >> 1) << IAVF_TX_DESC_MACLEN_SHIFT;
 	offload |= (hlen >> 2) << IAVF_TX_DESC_IPLEN_SHIFT;
 
-	if (ext.tcp && ISSET(m0->m_pkthdr.csum_flags, M_TCP_CSUM_OUT)) {
+	if (ext.tcp && ISSET(m->m_pkthdr.csum_flags, M_TCP_CSUM_OUT)) {
 		offload |= IAVF_TX_DESC_CMD_L4T_EOFT_TCP;
 		offload |= (uint64_t)(ext.tcphlen >> 2)
 		    << IAVF_TX_DESC_L4LEN_SHIFT;
-	} else if (ext.udp && ISSET(m0->m_pkthdr.csum_flags, M_UDP_CSUM_OUT)) {
+	} else if (ext.udp && ISSET(m->m_pkthdr.csum_flags, M_UDP_CSUM_OUT)) {
 		offload |= IAVF_TX_DESC_CMD_L4T_EOFT_UDP;
 		offload |= (uint64_t)(sizeof(*ext.udp) >> 2)
 		    << IAVF_TX_DESC_L4LEN_SHIFT;
 	}
 
-	if (ISSET(m0->m_pkthdr.csum_flags, M_TCP_TSO)) {
-		if (ext.tcp && m0->m_pkthdr.ph_mss > 0) {
+	if (ISSET(m->m_pkthdr.csum_flags, M_TCP_TSO)) {
+		if (ext.tcp && m->m_pkthdr.ph_mss > 0) {
 			struct iavf_tx_desc *ring, *txd;
 			uint64_t cmd = 0, paylen, outlen;
 
@@ -1902,8 +1907,8 @@ iavf_tx_setup_offload(struct mbuf *m0, struct iavf_tx_ring *txr,
 			 * The MSS should not be set to a lower value than 64
 			 * or larger than 9668 bytes.
 			 */
-			outlen = MIN(9668, MAX(64, m0->m_pkthdr.ph_mss));
-			paylen = m0->m_pkthdr.len - ETHER_HDR_LEN - hlen;
+			outlen = MIN(9668, MAX(64, m->m_pkthdr.ph_mss));
+			paylen = m->m_pkthdr.len - ETHER_HDR_LEN - hlen;
 			ring = IAVF_DMA_KVA(&txr->txr_mem);
 			txd = &ring[prod];
 
@@ -1917,7 +1922,7 @@ iavf_tx_setup_offload(struct mbuf *m0, struct iavf_tx_ring *txr,
 		}
 	}
 
-	return (offload);
+	return offload;
 }
 
 static void
@@ -1968,7 +1973,7 @@ iavf_start(struct ifqueue *ifq)
 		if (m == NULL)
 			break;
 
-		offload = iavf_tx_setup_offload(m, txr, prod);
+		offload = iavf_tx_offload(m, txr, prod);
 
 		txm = &txr->txr_maps[prod];
 		map = txm->txm_map;
@@ -2294,6 +2299,7 @@ iavf_rxeof(struct iavf_softc *sc, struct ifiqueue *ifiq)
 		m->m_pkthdr.len += len;
 
 		if (ISSET(word, IAVF_RX_DESC_EOP)) {
+#if NVLAN > 0
 			if (ISSET(word, IAVF_RX_DESC_L2TAG1P)) {
 				vlan = (lemtoh64(&rxd->qword0) &
 				    IAVF_RX_DESC_L2TAG1_MASK)
@@ -2301,6 +2307,7 @@ iavf_rxeof(struct iavf_softc *sc, struct ifiqueue *ifiq)
 				m->m_pkthdr.ether_vtag = vlan;
 				m->m_flags |= M_VLANTAG;
 			}
+#endif
 			if (!ISSET(word,
 			    IAVF_RX_DESC_RXE | IAVF_RX_DESC_OVERSIZE)) {
 				iavf_rx_checksum(m, word);
