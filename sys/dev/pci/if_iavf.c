@@ -617,6 +617,7 @@ struct iavf_softc {
 	uint32_t		 sc_major_ver;
 	uint32_t		 sc_minor_ver;
 
+	int			 sc_if_attached;
 	int			 sc_got_vf_resources;
 	int			 sc_got_irq_map;
 	uint32_t		 sc_vf_id;
@@ -1084,6 +1085,7 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 
 	if_attach_queues(ifp, iavf_nqueues(sc));
 	if_attach_iqueues(ifp, iavf_nqueues(sc));
+	sc->sc_if_attached++;
 
 	iavf_intr_enable(sc);
 
@@ -1629,7 +1631,8 @@ iavf_reset(void *xsc)
 	link_state = ifp->if_link_state;
 	if (ifp->if_link_state != LINK_STATE_DOWN) {
 		ifp->if_link_state = LINK_STATE_DOWN;
-		if_link_state_change(ifp);
+		if (sc->sc_if_attached)
+			if_link_state_change(ifp);
 	}
 
 	up = 0;
