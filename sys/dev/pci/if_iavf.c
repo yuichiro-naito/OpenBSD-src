@@ -1668,7 +1668,7 @@ iavf_load_mbuf(bus_dma_tag_t dmat, bus_dmamap_t map, struct mbuf *m)
 }
 
 static uint64_t
-iavf_tx_offload(struct mbuf *m)
+iavf_tx_offload(struct mbuf *m, struct iavf_tx_ring *txr, unsigned int prod)
 {
 	struct ether_extracted ext;
 	uint64_t hlen;
@@ -1715,8 +1715,8 @@ iavf_tx_offload(struct mbuf *m)
 		    << IAVF_TX_DESC_L4LEN_SHIFT;
 	}
 
-	if (ISSET(m0->m_pkthdr.csum_flags, M_TCP_TSO)) {
-		if (ext.tcp && m0->m_pkthdr.ph_mss > 0) {
+	if (ISSET(m->m_pkthdr.csum_flags, M_TCP_TSO)) {
+		if (ext.tcp && m->m_pkthdr.ph_mss > 0) {
 			struct iavf_tx_desc *ring, *txd;
 			uint64_t cmd = 0, paylen, outlen;
 
@@ -1726,8 +1726,8 @@ iavf_tx_offload(struct mbuf *m)
 			 * The MSS should not be set to a lower value than 64
 			 * or larger than 9668 bytes.
 			 */
-			outlen = MIN(9668, MAX(64, m0->m_pkthdr.ph_mss));
-			paylen = m0->m_pkthdr.len - ETHER_HDR_LEN - hlen;
+			outlen = MIN(9668, MAX(64, m->m_pkthdr.ph_mss));
+			paylen = m->m_pkthdr.len - ETHER_HDR_LEN - hlen;
 			ring = IAVF_DMA_KVA(&txr->txr_mem);
 			txd = &ring[prod];
 
@@ -1791,7 +1791,7 @@ iavf_start(struct ifqueue *ifq)
 		if (m == NULL)
 			break;
 
-		offload = iavf_tx_offload(m);
+		offload = iavf_tx_offload(m, txr, prod);
 
 		txm = &txr->txr_maps[prod];
 		map = txm->txm_map;
