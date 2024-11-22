@@ -477,7 +477,6 @@ struct iavf_rx_wb_desc_32 {
 #define IAVF_TX_PKT_DESCS		8
 #define IAVF_TX_QUEUE_ALIGN		128
 #define IAVF_RX_QUEUE_ALIGN		128
-#define IAVF_TX_PKT_MAXSIZE             (MCLBYTES * IAVF_TX_PKT_DESCS)
 
 #define IAVF_HARDMTU			9712 /* 9726 - ETHER_HDR_LEN */
 
