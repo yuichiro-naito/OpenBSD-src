@@ -2000,8 +2000,8 @@ iavf_start(struct ifqueue *ifq)
 
 			cmd = (uint64_t)map->dm_segs[i].ds_len <<
 			    IAVF_TX_DESC_BSIZE_SHIFT;
-			cmd |= IAVF_TX_DESC_DTYPE_DATA | IAVF_TX_DESC_CMD_ICRC |
-			    offload;
+			cmd |= IAVF_TX_DESC_DTYPE_DATA | IAVF_TX_DESC_CMD_ICRC;
+			cmd |= offload;
 
 			htolem64(&txd->addr, map->dm_segs[i].ds_addr);
 			htolem64(&txd->cmd, cmd);
