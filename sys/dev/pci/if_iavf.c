@@ -1683,7 +1683,7 @@ iavf_tx_offload(struct mbuf *m, struct iavf_tx_ring *txr, unsigned int prod)
 #endif
 
 	if (!ISSET(m->m_pkthdr.csum_flags,
-	    M_IPV4_CSUM_OUT|M_TCP_CSUM_OUT|M_UDP_CSUM_OUT))
+	    M_IPV4_CSUM_OUT|M_TCP_CSUM_OUT|M_UDP_CSUM_OUT|M_TCP_TSO))
 		return (offload);
 
 	ether_extract_headers(m, &ext);
