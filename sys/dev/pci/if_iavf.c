@@ -1939,7 +1939,6 @@ iavf_start(struct ifqueue *ifq)
 	bus_dmamap_t map;
 	struct mbuf *m;
 	uint64_t cmd;
-	uint64_t vlan_cmd;
 	uint64_t offload;
 	unsigned int prod, free, last, i;
 	unsigned int mask;
@@ -1996,20 +1995,13 @@ iavf_start(struct ifqueue *ifq)
 		bus_dmamap_sync(sc->sc_dmat, map, 0,
 		    map->dm_mapsize, BUS_DMASYNC_PREWRITE);
 
-		vlan_cmd = 0;
-		if (m->m_flags & M_VLANTAG) {
-			vlan_cmd = IAVF_TX_DESC_CMD_IL2TAG1 |
-			    (((uint64_t)m->m_pkthdr.ether_vtag) <<
-			    IAVF_TX_DESC_L2TAG1_SHIFT);
-		}
-
 		for (i = 0; i < map->dm_nsegs; i++) {
 			txd = &ring[prod];
 
 			cmd = (uint64_t)map->dm_segs[i].ds_len <<
 			    IAVF_TX_DESC_BSIZE_SHIFT;
 			cmd |= IAVF_TX_DESC_DTYPE_DATA | IAVF_TX_DESC_CMD_ICRC |
-			    vlan_cmd | offload;
+			    offload;
 
 			htolem64(&txd->addr, map->dm_segs[i].ds_addr);
 			htolem64(&txd->cmd, cmd);
