@@ -1398,6 +1398,10 @@ iavf_up(struct iavf_softc *sc)
 
 	SET(ifp->if_flags, IFF_RUNNING);
 
+        for (i = 0; i < nqueues; i++) {
+                iavf_wr(sc, I40E_VFINT_ITRN1(0, i), 0x7a);
+                iavf_wr(sc, I40E_VFINT_ITRN1(1, i), 0x7a);
+        }
 	iavf_wr(sc, I40E_VFINT_ITR01(0), 0x7a);
 	iavf_wr(sc, I40E_VFINT_ITR01(1), 0x7a);
 	iavf_wr(sc, I40E_VFINT_ITR01(2), 0);
