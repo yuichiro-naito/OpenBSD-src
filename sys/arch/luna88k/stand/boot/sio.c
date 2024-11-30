@@ -138,6 +138,7 @@ siocnprobe(struct consdev *cp)
 
 	/* initialize required fields */
 	cp->cn_dev = 0;
+	add_probed_tty(cp->cn_dev);
 	cp->cn_pri = CN_LOWPRI;
 }
 

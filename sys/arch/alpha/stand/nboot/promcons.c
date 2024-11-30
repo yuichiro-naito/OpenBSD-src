@@ -46,6 +46,7 @@ prom_cnprobe(struct consdev *cn)
 
 	cn->cn_pri = CN_MIDPRI;
 	cn->cn_dev = makedev(0, console);
+	add_probed_tty(cn->cn_dev);
 }
 
 void
