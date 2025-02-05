@@ -63,6 +63,7 @@
 #include <sys/timeout.h>
 #include <sys/task.h>
 #include <sys/syslog.h>
+#include <sys/intrmap.h>
 
 #include <machine/bus.h>
 #include <machine/intr.h>
@@ -82,6 +83,11 @@
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcidevs.h>
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64
+#endif
+
+#define IAVF_MAX_VECTORS		4
 #define IAVF_MAX_DMA_SEG_SIZE		((16 * 1024) - 1)
 
 #define I40E_MASK(mask, shift)		((mask) << (shift))
@@ -93,7 +99,10 @@
 #define IAVF_VFR_COMPLETED		1
 #define IAVF_VFR_VFACTIVE		2
 
+#define IAVF_EXEC_TIMEOUT               3000
+
 #include <dev/pci/if_ixlreg.h>
+#include <dev/pci/if_ixlvar.h>
 
 struct iavf_aq_desc {
 	uint16_t	iaq_flags;
@@ -534,6 +543,7 @@ struct iavf_tx_map {
 struct iavf_tx_ring {
 	unsigned int		 txr_prod;
 	unsigned int		 txr_cons;
+	struct ifqueue		*txr_ifq;
 
 	struct iavf_tx_map	*txr_maps;
 	struct iavf_dmamem	 txr_mem;
@@ -549,6 +559,7 @@ struct iavf_rx_map {
 
 struct iavf_rx_ring {
 	struct iavf_softc	*rxr_sc;
+	struct ifiqueue		*rxr_ifiq;
 
 	struct if_rxring	 rxr_acct;
 	struct timeout		 rxr_refill;
@@ -566,17 +577,36 @@ struct iavf_rx_ring {
 	unsigned int		 rxr_qid;
 };
 
+struct iavf_vector {
+	struct iavf_softc	*iv_sc;
+	struct iavf_rx_ring	*iv_rxr;
+	struct iavf_tx_ring	*iv_txr;
+	int			 iv_qid;
+	void			*iv_ihc;
+	char			 iv_name[16];
+} __aligned(CACHE_LINE_SIZE);
+
+enum i40e_mac_type {
+        I40E_MAC_XL710,
+        I40E_MAC_X722,
+        I40E_MAC_X722_VF,
+        I40E_MAC_VF,
+        I40E_MAC_GENERIC
+};
+
 struct iavf_softc {
 	struct device		 sc_dev;
 	struct arpcom		 sc_ac;
 	struct ifmedia		 sc_media;
 	uint64_t		 sc_media_status;
 	uint64_t		 sc_media_active;
+	enum i40e_mac_type       sc_mac_type;
 
 	pci_chipset_tag_t	 sc_pc;
 	pci_intr_handle_t	 sc_ih;
 	void			*sc_ihc;
 	pcitag_t		 sc_tag;
+	struct intrmap		*sc_intrmap;
 
 	bus_dma_tag_t		 sc_dmat;
 	bus_space_tag_t		 sc_memt;
@@ -620,6 +650,9 @@ struct iavf_softc {
 	unsigned int		 sc_tx_ring_ndescs;
 	unsigned int		 sc_rx_ring_ndescs;
 	unsigned int		 sc_nqueues;	/* 1 << sc_nqueues */
+	unsigned int             sc_nintrs;
+
+	struct iavf_vector	*sc_vectors;
 
 	struct rwlock		 sc_cfg_lock;
 	unsigned int		 sc_dead;
@@ -644,6 +677,7 @@ static void	iavf_atq_done(struct iavf_softc *);
 
 static void	iavf_init_admin_queue(struct iavf_softc *);
 
+static enum i40e_mac_type iavf_mactype(pci_product_id_t);
 static int	iavf_get_version(struct iavf_softc *);
 static int	iavf_get_vf_resources(struct iavf_softc *);
 static int	iavf_config_irq_map(struct iavf_softc *);
@@ -652,6 +686,7 @@ static int	iavf_add_del_addr(struct iavf_softc *, uint8_t *, int);
 static int	iavf_process_arq(struct iavf_softc *, int);
 
 static int	iavf_match(struct device *, void *, void *);
+static int	iavf_setup_interrupts(struct iavf_softc *, struct pci_attach_args *);
 static void	iavf_attach(struct device *, struct device *, void *);
 
 static int	iavf_media_change(struct ifnet *);
@@ -660,6 +695,7 @@ static void	iavf_watchdog(struct ifnet *);
 static int	iavf_ioctl(struct ifnet *, u_long, caddr_t);
 static void	iavf_start(struct ifqueue *);
 static int	iavf_intr(void *);
+static int	iavf_intr_vector(void *);
 static int	iavf_up(struct iavf_softc *);
 static int	iavf_down(struct iavf_softc *);
 static int	iavf_iff(struct iavf_softc *);
@@ -723,9 +759,17 @@ static const struct iavf_aq_regs iavf_aq_regs = {
 	    I40E_VFINT_DYN_CTL0_CLEARPBA_MASK | \
 	    (IAVF_NOITR << I40E_VFINT_DYN_CTL0_ITR_INDX_SHIFT)); \
 	iavf_wr((_s), I40E_VFINT_ICR0_ENA1, I40E_VFINT_ICR0_ENA1_ADMINQ_MASK)
+#define iavf_queue_intr_enable(_s, _q)					\
+        iavf_wr((_s), I40E_VFINT_DYN_CTLN1((_q)),			\
+		I40E_VFINT_DYN_CTLN1_INTENA_MASK |			\
+		I40E_VFINT_DYN_CTLN1_CLEARPBA_MASK |			\
+		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT))
+#define iavf_queue_intr_disable(_s, _q)					\
+        iavf_wr((_s), I40E_VFINT_DYN_CTLN1((_q)),			\
+		(IAVF_NOITR << I40E_VFINT_DYN_CTLN1_ITR_INDX_SHIFT))
 
 #define iavf_nqueues(_sc)	(1 << (_sc)->sc_nqueues)
-#define iavf_allqueues(_sc)	((1 << ((_sc)->sc_nqueues+1)) - 1)
+#define iavf_allqueues(_sc)	((1 << (iavf_nqueues(_sc))) - 1)
 
 #ifdef __LP64__
 #define iavf_dmamem_hi(_ixm)	(uint32_t)(IAVF_DMA_DVA(_ixm) >> 32)
@@ -765,6 +809,107 @@ iavf_match(struct device *parent, void *match, void *aux)
 	return (pci_matchbyid(aux, iavf_devices, nitems(iavf_devices)));
 }
 
+static enum i40e_mac_type
+iavf_mactype(pci_product_id_t id)
+{
+
+        switch (id) {
+        case PCI_PRODUCT_INTEL_XL710_VF:
+        case PCI_PRODUCT_INTEL_XL710_VF_HV:
+                return I40E_MAC_VF;
+        case PCI_PRODUCT_INTEL_X722_VF:
+                return I40E_MAC_X722_VF;
+        }
+
+        return I40E_MAC_GENERIC;
+}
+
+static int
+iavf_intr_vector(void *v)
+{
+	struct iavf_vector *iv = v;
+	struct iavf_softc *sc = iv->iv_sc;
+
+	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	int rv = 0;
+
+	if (ISSET(ifp->if_flags, IFF_RUNNING)) {
+		rv |= iavf_rxeof(sc, iv->iv_rxr->rxr_ifiq);
+		rv |= iavf_txeof(sc, iv->iv_txr->txr_ifq);
+	}
+
+	iavf_queue_intr_enable(sc, iv->iv_qid);
+
+	return rv;
+}
+
+static int
+iavf_setup_interrupts(struct iavf_softc *sc, struct pci_attach_args *pa)
+{
+	unsigned int i, v, nqueues = iavf_nqueues(sc);
+	struct iavf_vector *iv;
+	pci_intr_handle_t ih;
+
+	sc->sc_ihc = pci_intr_establish(sc->sc_pc, sc->sc_ih,
+	    IPL_NET | IPL_MPSAFE, iavf_intr, sc, DEVNAME(sc));
+	if (sc->sc_ihc == NULL) {
+		printf("%s: unable to establish interrupt handler\n",
+		    DEVNAME(sc));
+		return -1;
+	}
+
+	sc->sc_vectors = mallocarray(sizeof(*sc->sc_vectors), nqueues,
+	    M_DEVBUF, M_WAITOK|M_CANFAIL|M_ZERO);
+	if (sc->sc_vectors == NULL) {
+		printf("%s: unable to allocate vectors\n", DEVNAME(sc));
+		return -1;
+	}
+
+	for (i = 0; i < nqueues; i++) {
+		iv = &sc->sc_vectors[i];
+		iv->iv_sc = sc;
+		iv->iv_qid = i;
+		snprintf(iv->iv_name, sizeof(iv->iv_name), "%s:%u",
+			 DEVNAME(sc), i);
+	}
+
+	if (sc->sc_intrmap) {
+		for (i = 0; i < nqueues; i++) {
+			iv = &sc->sc_vectors[i];
+			v = i + 1; /* 0 is used for adminq */
+
+			if (pci_intr_map_msix(pa, v, &ih)) {
+				printf("%s: unable to map msi-x vector %d\n",
+				    DEVNAME(sc), v);
+				goto free_vectors;
+			}
+
+			iv->iv_ihc = pci_intr_establish_cpu(sc->sc_pc, ih,
+			    IPL_NET | IPL_MPSAFE,
+			    intrmap_cpu(sc->sc_intrmap, i),
+			    iavf_intr_vector, iv, iv->iv_name);
+			if (iv->iv_ihc == NULL) {
+				printf("%s: unable to establish interrupt %d\n",
+				    DEVNAME(sc), v);
+				goto free_vectors;
+			}
+		}
+	}
+
+	sc->sc_nintrs = nqueues + 1;
+	return 0;
+free_vectors:
+	if (sc->sc_intrmap != NULL) {
+		for (i = 0; i < nqueues; i++) {
+			struct iavf_vector *iv = &sc->sc_vectors[i];
+			if (iv->iv_ihc != NULL)
+				pci_intr_disestablish(sc->sc_pc, iv->iv_ihc);
+		}
+	}
+	free(sc->sc_vectors, M_DEVBUF, nqueues * sizeof(*sc->sc_vectors));
+	return -1;
+}
+
 void
 iavf_attach(struct device *parent, struct device *self, void *aux)
 {
@@ -772,7 +917,8 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
 	struct pci_attach_args *pa = aux;
 	pcireg_t memtype;
-	int tries;
+	int nmsix, tries;
+	unsigned int nqueues;
 
 	rw_init(&sc->sc_cfg_lock, "iavfcfg");
 
@@ -780,6 +926,8 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_tag = pa->pa_tag;
 	sc->sc_dmat = pa->pa_dmat;
 	sc->sc_aq_regs = &iavf_aq_regs;
+
+	sc->sc_mac_type = iavf_mactype(PCI_PRODUCT(pa->pa_id));
 
 	sc->sc_nqueues = 0; /* 1 << 0 is 1 queue */
 	sc->sc_tx_ring_ndescs = 1024;
@@ -860,13 +1008,20 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 		goto free_scratch;
 	}
 
-	if (iavf_config_irq_map(sc) != 0) {
-		printf(", timeout waiting for IRQ map response");
-		goto free_scratch;
-	}
-
 	/* msix only? */
-	if (pci_intr_map_msix(pa, 0, &sc->sc_ih) != 0) {
+	if (pci_intr_map_msix(pa, 0, &sc->sc_ih) == 0) {
+		nmsix = pci_intr_msix_count(pa);
+		if (nmsix > 1) { /* we used 1 (the 0th) for the adminq */
+			nmsix--;
+
+			sc->sc_intrmap = intrmap_create(&sc->sc_dev,
+			    nmsix, IAVF_MAX_VECTORS, INTRMAP_POWEROF2);
+			nqueues = intrmap_count(sc->sc_intrmap);
+			KASSERT(nqueues > 0);
+			KASSERT(powerof2(nqueues));
+			sc->sc_nqueues = fls(nqueues) - 1;
+		}
+	} else {
 		printf(", unable to map interrupt\n");
 		goto free_scratch;
 	}
@@ -876,14 +1031,20 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	if (memcmp(sc->sc_ac.ac_enaddr, etheranyaddr, ETHER_ADDR_LEN) == 0)
 		ether_fakeaddr(ifp);
 
-	printf(", %s, address %s\n", pci_intr_string(sc->sc_pc, sc->sc_ih),
-	    ether_sprintf(sc->sc_ac.ac_enaddr));
+	nqueues = iavf_nqueues(sc);
+	printf(", %s, %d queue%s, address %s\n",
+	       pci_intr_string(sc->sc_pc, sc->sc_ih),
+	       nqueues, (nqueues > 1 ? "s" : ""),
+	       ether_sprintf(sc->sc_ac.ac_enaddr));
 
-	sc->sc_ihc = pci_intr_establish(sc->sc_pc, sc->sc_ih,
-	    IPL_NET | IPL_MPSAFE, iavf_intr, sc, DEVNAME(sc));
-	if (sc->sc_ihc == NULL) {
+	if (iavf_setup_interrupts(sc, pa) != 0) {
 		printf("%s: unable to establish interrupt handler\n",
 		    DEVNAME(sc));
+		goto free_scratch;
+	}
+
+	if (iavf_config_irq_map(sc) != 0) {
+		printf(", timeout waiting for IRQ map response");
 		goto free_scratch;
 	}
 
@@ -1106,7 +1267,7 @@ iavf_config_vsi_queues(struct iavf_softc *sc)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: CONFIG_VSI_QUEUES failed: %d\n", DEVNAME(sc), rv);
 		return (1);
@@ -1130,10 +1291,11 @@ iavf_config_hena(struct iavf_softc *sc)
 	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
 
 	caps = IAVF_DMA_KVA(&sc->sc_scratch);
-	*caps = 0;
+	*caps = (sc->sc_mac_type == I40E_MAC_X722_VF) ? IXL_RSS_HENA_BASE_722 :
+		IXL_RSS_HENA_BASE_710;
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: SET_RSS_HENA failed: %d\n", DEVNAME(sc), rv);
 		return (1);
@@ -1168,7 +1330,7 @@ iavf_queue_select(struct iavf_softc *sc, int opcode)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: queue op %d failed: %d\n", DEVNAME(sc), opcode, rv);
 		return (1);
@@ -1181,13 +1343,13 @@ static int
 iavf_up(struct iavf_softc *sc)
 {
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	struct iavf_vector  *iv;
 	struct iavf_rx_ring *rxr;
 	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
 	int rv = ENOMEM;
 
 	nqueues = iavf_nqueues(sc);
-	KASSERT(nqueues == 1); /* XXX */
 
 	rw_enter_write(&sc->sc_cfg_lock);
 	if (sc->sc_dead) {
@@ -1206,8 +1368,11 @@ iavf_up(struct iavf_softc *sc)
 			goto free;
 		}
 
-		ifp->if_iqs[i]->ifiq_softc = rxr;
-		ifp->if_ifqs[i]->ifq_softc = txr;
+		iv = &sc->sc_vectors[i];
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = rxr;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = txr;
+		rxr->rxr_ifiq = ifp->if_iqs[i];
+		txr->txr_ifq = ifp->if_ifqs[i];
 
 		iavf_rxfill(sc, rxr);
 	}
@@ -1221,8 +1386,15 @@ iavf_up(struct iavf_softc *sc)
 	if (iavf_queue_select(sc, IAVF_VC_OP_ENABLE_QUEUES) != 0)
 		goto down;
 
+	for (i = 0; i < nqueues; i++)
+		iavf_queue_intr_enable(sc, i);
+
 	SET(ifp->if_flags, IFF_RUNNING);
 
+	for (i = 0; i < nqueues; i++) {
+		iavf_wr(sc, I40E_VFINT_ITRN1(0, i), 0x7a);
+		iavf_wr(sc, I40E_VFINT_ITRN1(1, i), 0x7a);
+	}
 	iavf_wr(sc, I40E_VFINT_ITR01(0), 0x7a);
 	iavf_wr(sc, I40E_VFINT_ITR01(1), 0x7a);
 	iavf_wr(sc, I40E_VFINT_ITR01(2), 0);
@@ -1246,6 +1418,9 @@ free:
 
 		iavf_txr_free(sc, txr);
 		iavf_rxr_free(sc, rxr);
+		iv = &sc->sc_vectors[i];
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = NULL;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = NULL;
 	}
 	rw_exit_write(&sc->sc_cfg_lock);
 	return (rv);
@@ -1284,7 +1459,7 @@ iavf_config_promisc_mode(struct iavf_softc *sc, int unicast, int multicast)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: CONFIG_PROMISC_MODE failed: %d\n", DEVNAME(sc), rv);
 		return (1);
@@ -1323,7 +1498,7 @@ iavf_add_del_addr(struct iavf_softc *sc, uint8_t *addr, int add)
 	    BUS_DMASYNC_PREREAD);
 
 	iavf_atq_post(sc, &iaq);
-	rv = iavf_arq_wait(sc, 250);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
 	if (rv != IAVF_VC_RC_SUCCESS) {
 		printf("%s: ADD/DEL_ETH_ADDR failed: %d\n", DEVNAME(sc), rv);
 		return (1);
@@ -1368,6 +1543,7 @@ static int
 iavf_down(struct iavf_softc *sc)
 {
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
+	struct iavf_vector  *iv;
 	struct iavf_rx_ring *rxr;
 	struct iavf_tx_ring *txr;
 	unsigned int nqueues, i;
@@ -1397,6 +1573,8 @@ iavf_down(struct iavf_softc *sc)
 	/* make sure no hw generated work is still in flight */
 	intr_barrier(sc->sc_ihc);
 	for (i = 0; i < nqueues; i++) {
+		iavf_queue_intr_disable(sc, i);
+
 		rxr = ifp->if_iqs[i]->ifiq_softc;
 		txr = ifp->if_ifqs[i]->ifq_softc;
 
@@ -1406,8 +1584,9 @@ iavf_down(struct iavf_softc *sc)
 	}
 
 	for (i = 0; i < nqueues; i++) {
-		rxr = ifp->if_iqs[i]->ifiq_softc;
-		txr = ifp->if_ifqs[i]->ifq_softc;
+		iv = &sc->sc_vectors[i];
+		txr = iv->iv_txr;
+		rxr = iv->iv_rxr;
 
 		iavf_txr_clean(sc, txr);
 		iavf_rxr_clean(sc, rxr);
@@ -1415,8 +1594,8 @@ iavf_down(struct iavf_softc *sc)
 		iavf_txr_free(sc, txr);
 		iavf_rxr_free(sc, rxr);
 
-		ifp->if_iqs[i]->ifiq_softc = NULL;
-		ifp->if_ifqs[i]->ifq_softc =  NULL;
+		iv->iv_rxr = ifp->if_iqs[i]->ifiq_softc = NULL;
+		iv->iv_txr = ifp->if_ifqs[i]->ifq_softc = NULL;
 	}
 
 	/* unmask */
@@ -2666,25 +2845,45 @@ iavf_config_irq_map(struct iavf_softc *sc)
 	struct iavf_aq_desc iaq;
 	struct iavf_vc_vector_map *vec;
 	struct iavf_vc_irq_map_info *map;
+	struct iavf_vector *iv;
+	unsigned int num_vec = 0;
 	int tries;
 
 	memset(&iaq, 0, sizeof(iaq));
 	iaq.iaq_flags = htole16(IAVF_AQ_BUF | IAVF_AQ_RD);
 	iaq.iaq_opcode = htole16(IAVF_AQ_OP_SEND_TO_PF);
 	iaq.iaq_vc_opcode = htole32(IAVF_VC_OP_CONFIG_IRQ_MAP);
-	iaq.iaq_datalen = htole16(sizeof(*map) + sizeof(*vec));
+	iaq.iaq_datalen = htole16(sizeof(*map) + sizeof(*vec) * sc->sc_nintrs);
 	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
 
 	map = IAVF_DMA_KVA(&sc->sc_scratch);
-	map->num_vectors = htole16(1);
 
 	vec = map->vecmap;
-	vec[0].vsi_id = htole16(sc->sc_vsi_id);
-	vec[0].vector_id = 0;
-	vec[0].rxq_map = htole16(iavf_allqueues(sc));
-	vec[0].txq_map = htole16(iavf_allqueues(sc));
-	vec[0].rxitr_idx = htole16(IAVF_NOITR);
-	vec[0].txitr_idx = htole16(IAVF_NOITR);
+	if (sc->sc_nintrs == 1) {
+		vec[num_vec].vsi_id = htole16(sc->sc_vsi_id);
+		vec[num_vec].vector_id = htole16(num_vec);
+		vec[num_vec].rxq_map = htole16(iavf_allqueues(sc));
+		vec[num_vec].txq_map = htole16(iavf_allqueues(sc));
+		vec[num_vec].rxitr_idx = htole16(IAVF_NOITR);
+		vec[num_vec].txitr_idx = htole16(IAVF_NOITR);
+		num_vec++;
+	} else if (sc->sc_nintrs > 1) {
+		for (; num_vec < sc->sc_nintrs - 1; num_vec++) {
+			iv = &sc->sc_vectors[num_vec];
+			vec[num_vec].vsi_id = htole16(sc->sc_vsi_id);
+			vec[num_vec].vector_id = htole16(num_vec + 1);
+			vec[num_vec].rxq_map = htole16(1 << iv->iv_qid);
+			vec[num_vec].txq_map = htole16(1 << iv->iv_qid);
+			vec[num_vec].rxitr_idx = htole16(IAVF_ITR0);
+			vec[num_vec].txitr_idx = htole16(IAVF_ITR1);
+		}
+		vec[num_vec].vsi_id = htole16(sc->sc_vsi_id);
+		vec[num_vec].vector_id = htole16(0);
+		vec[num_vec].rxq_map = htole16(0);
+		vec[num_vec].txq_map = htole16(0);
+		num_vec++;
+	}
+	map->num_vectors = htole16(num_vec);
 
 	bus_dmamap_sync(sc->sc_dmat, IAVF_DMA_MAP(&sc->sc_scratch), 0, IAVF_DMA_LEN(&sc->sc_scratch),
 	    BUS_DMASYNC_PREREAD);
