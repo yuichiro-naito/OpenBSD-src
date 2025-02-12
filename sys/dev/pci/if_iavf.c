@@ -420,7 +420,9 @@ struct iavf_rx_rd_desc_32 {
 } __packed __aligned(16);
 
 struct iavf_rx_wb_desc_16 {
-	uint64_t		qword0;
+	uint16_t		_reserved1;
+	uint16_t		l2tag1;
+	uint32_t		filter_status;
 #define IAVF_RX_DESC_L2TAG1_SHIFT	16
 #define IAVF_RX_DESC_L2TAG1_MASK	(0xffff << IAVF_RX_DESC_L2TAG1_SHIFT)
 	uint64_t		qword1;
@@ -461,6 +463,8 @@ struct iavf_rx_wb_desc_16 {
 #define IAVF_RX_DESC_PLEN_MASK		(0x3fffULL << IAVF_RX_DESC_PLEN_SHIFT)
 #define IAVF_RX_DESC_HLEN_SHIFT		42
 #define IAVF_RX_DESC_HLEN_MASK		(0x7ffULL << IAVF_RX_DESC_HLEN_SHIFT)
+	uint64_t		qword2;
+	uint64_t		qword3;
 } __packed __aligned(16);
 
 struct iavf_rx_wb_desc_32 {
@@ -1052,7 +1056,6 @@ iavf_attach(struct device *parent, struct device *self, void *aux)
 	ifp->if_softc = sc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_xflags = IFXF_MPSAFE;
-	ifp->if_txmit = 1;
 	ifp->if_ioctl = iavf_ioctl;
 	ifp->if_qstart = iavf_start;
 	ifp->if_watchdog = iavf_watchdog;
@@ -2234,14 +2237,13 @@ iavf_rxeof(struct iavf_softc *sc, struct ifiqueue *ifiq)
 {
 	struct iavf_rx_ring *rxr = ifiq->ifiq_softc;
 	struct ifnet *ifp = &sc->sc_ac.ac_if;
-	struct iavf_rx_wb_desc_32 *ring, *rxd;
+	struct iavf_rx_wb_desc_16 *ring, *rxd;
 	struct iavf_rx_map *rxm;
 	bus_dmamap_t map;
 	unsigned int cons, prod;
 	struct mbuf_list ml = MBUF_LIST_INITIALIZER();
 	struct mbuf *m;
 	uint64_t word;
-	uint16_t vlan;
 	unsigned int len;
 	unsigned int mask;
 	int done = 0;
@@ -2277,7 +2279,7 @@ iavf_rxeof(struct iavf_softc *sc, struct ifiqueue *ifiq)
 		bus_dmamap_sync(sc->sc_dmat, map, 0, map->dm_mapsize,
 		    BUS_DMASYNC_POSTREAD);
 		bus_dmamap_unload(sc->sc_dmat, map);
-		
+
 		m = rxm->rxm_m;
 		rxm->rxm_m = NULL;
 
@@ -2293,17 +2295,22 @@ iavf_rxeof(struct iavf_softc *sc, struct ifiqueue *ifiq)
 		m->m_pkthdr.len += len;
 
 		if (ISSET(word, IAVF_RX_DESC_EOP)) {
-#if NVLAN > 0
-			if (ISSET(word, IAVF_RX_DESC_L2TAG1P)) {
-				vlan = (lemtoh64(&rxd->qword0) &
-				    IAVF_RX_DESC_L2TAG1_MASK)
-				    >> IAVF_RX_DESC_L2TAG1_SHIFT;
-				m->m_pkthdr.ether_vtag = vlan;
-				m->m_flags |= M_VLANTAG;
-			}
-#endif
 			if (!ISSET(word,
-			    IAVF_RX_DESC_RXE | IAVF_RX_DESC_OVERSIZE)) {
+			   IAVF_RX_DESC_RXE | IAVF_RX_DESC_OVERSIZE)) {
+				if ((word & IAVF_RX_DESC_FLTSTAT_MASK) ==
+				    IAVF_RX_DESC_FLTSTAT_RSS) {
+					m->m_pkthdr.ph_flowid =
+						lemtoh32(&rxd->filter_status);
+					m->m_pkthdr.csum_flags |= M_FLOWID;
+				}
+
+#if NVLAN > 0
+				if (ISSET(word, IAVF_RX_DESC_L2TAG1P)) {
+					m->m_pkthdr.ether_vtag =
+						lemtoh16(&rxd->l2tag1);
+					m->m_flags |= M_VLANTAG;
+				}
+#endif
 				iavf_rx_checksum(m, word);
 				ml_enqueue(&ml, m);
 			} else {
