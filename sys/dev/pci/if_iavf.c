@@ -200,11 +200,6 @@ struct iavf_aq_desc {
 #define IAVC_VC_LINK_SPEED_20GB		0x5
 #define IAVC_VC_LINK_SPEED_25GB		0x6
 
-/* RSS */
-#define IAVF_RSS_VSI_LUT_SIZE 64
-#define IAVF_RSS_KEY_SIZE_REG 10
-#define IAVF_RSS_KEY_SIZE        (IAVF_RSS_KEY_SIZE_REG * sizeof(uint32_t))
-
 struct iavf_link_speed {
 	uint64_t	baudrate;
 	uint64_t	media;
@@ -651,6 +646,8 @@ struct iavf_softc {
 	uint16_t		 sc_vsi_id;
 	uint16_t		 sc_qset_handle;
 	unsigned int		 sc_base_queue;
+	uint32_t		 sc_rss_key_size;
+	uint32_t		 sc_rss_lut_size;
 
 	struct cond		 sc_admin_cond;
 	int			 sc_admin_result;
@@ -1341,7 +1338,7 @@ iavf_config_rss_key(struct iavf_softc *sc)
 {
 	struct iavf_aq_desc iaq;
 	struct iavf_vc_rss_key *rss_key;
-	size_t key_len = IAVF_RSS_KEY_SIZE;
+	uint32_t key_len = sc->sc_rss_key_size;
 	int rv;
 
 	memset(&iaq, 0, sizeof(iaq));
@@ -1355,7 +1352,7 @@ iavf_config_rss_key(struct iavf_softc *sc)
 	rss_key = IAVF_DMA_KVA(&sc->sc_scratch);
 	rss_key->vsi_id = htole16(sc->sc_vsi_id);
 	stoeplitz_to_key(&rss_key->key, key_len);
-	rss_key->key_len = key_len;
+	rss_key->key_len = htole16(key_len);
 	rss_key->key[key_len] = 0;
 
 	iavf_atq_post(sc, &iaq);
@@ -1364,7 +1361,6 @@ iavf_config_rss_key(struct iavf_softc *sc)
 		printf("%s: CONFIG_RSS_KEY failed: %d\n", DEVNAME(sc), rv);
 		return (1);
 	}
-
 	return (0);
 }
 
@@ -1374,6 +1370,7 @@ iavf_config_rss_lut(struct iavf_softc *sc)
 	struct iavf_aq_desc iaq;
 	struct iavf_vc_rss_lut *rss_lut;
 	uint8_t *lut;
+	uint32_t lut_size = sc->sc_rss_lut_size;
 	int i, rv;
 
 	memset(&iaq, 0, sizeof(iaq));
@@ -1381,15 +1378,15 @@ iavf_config_rss_lut(struct iavf_softc *sc)
 	iaq.iaq_opcode = htole16(IAVF_AQ_OP_SEND_TO_PF);
 	iaq.iaq_vc_opcode = htole32(IAVF_VC_OP_CONFIG_RSS_LUT);
 	iaq.iaq_datalen = htole16(sizeof(*rss_lut) - sizeof(rss_lut->pad)
-		+ (sizeof(rss_lut->lut[0]) * IAVF_RSS_VSI_LUT_SIZE));
+		+ (sizeof(rss_lut->lut[0]) * lut_size));
 	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
 
 	rss_lut = IAVF_DMA_KVA(&sc->sc_scratch);
 	rss_lut->vsi_id = htole16(sc->sc_vsi_id);
-	rss_lut->lut_entries = htole16(IAVF_RSS_VSI_LUT_SIZE);
+	rss_lut->lut_entries = htole16(lut_size);
 
 	lut = rss_lut->lut;
-	for (i = 0; i < IAVF_RSS_VSI_LUT_SIZE; i++)
+	for (i = 0; i < lut_size; i++)
 		lut[i] = (i % iavf_nqueues(sc)) & IAVF_RSS_VSI_LUT_ENTRY_MASK;
 	rss_lut->lut[i] = 0;
 
@@ -2588,6 +2585,9 @@ iavf_process_vf_resources(struct iavf_softc *sc, struct iavf_aq_desc *desc,
 		/* set vsi number to something */
 		return;
 	}
+
+	sc->sc_rss_key_size = vf_res->rss_key_size;
+	sc->sc_rss_lut_size = vf_res->rss_lut_size;
 
 	mtu = letoh16(vf_res->max_mtu);
 	if (mtu != 0)
