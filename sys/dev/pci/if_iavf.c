@@ -75,6 +75,7 @@
 #include <net/bpf.h>
 #endif
 
+#include <net/toeplitz.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 #include <netinet/udp.h>
@@ -158,6 +159,8 @@ struct iavf_aq_desc {
 #define IAVF_VC_OP_CONFIG_PROMISC	14
 #define IAVF_VC_OP_GET_STATS		15
 #define IAVF_VC_OP_EVENT		17
+#define IAVF_VC_OP_CONFIG_RSS_KEY       23
+#define IAVF_VC_OP_CONFIG_RSS_LUT       24
 #define IAVF_VC_OP_GET_RSS_HENA_CAPS	25
 #define IAVF_VC_OP_SET_RSS_HENA		26
 
@@ -196,6 +199,11 @@ struct iavf_aq_desc {
 #define IAVC_VC_LINK_SPEED_40GB		0x4
 #define IAVC_VC_LINK_SPEED_20GB		0x5
 #define IAVC_VC_LINK_SPEED_25GB		0x6
+
+/* RSS */
+#define IAVF_RSS_VSI_LUT_SIZE 64
+#define IAVF_RSS_KEY_SIZE_REG 10
+#define IAVF_RSS_KEY_SIZE        (IAVF_RSS_KEY_SIZE_REG * sizeof(uint32_t))
 
 struct iavf_link_speed {
 	uint64_t	baudrate;
@@ -324,6 +332,22 @@ struct iavf_vc_pf_event {
 	uint8_t		pad[3];
 	uint32_t	severity;
 } __packed;
+
+struct iavf_vc_rss_key {
+        uint16_t        vsi_id;
+        uint16_t        key_len;
+        uint8_t         key[1];
+        uint8_t         pad[1];
+} __packed;
+
+struct iavf_vc_rss_lut {
+        uint16_t        vsi_id;
+        uint16_t        lut_entries;
+        uint8_t         lut[1];
+        uint8_t         pad[1];
+}__packed;
+
+#define IAVF_RSS_VSI_LUT_ENTRY_MASK     0x3F
 
 /* aq response codes */
 #define IAVF_AQ_RC_OK			0  /* success */
@@ -685,6 +709,8 @@ static void	iavf_init_admin_queue(struct iavf_softc *);
 static enum i40e_mac_type iavf_mactype(pci_product_id_t);
 static int	iavf_get_version(struct iavf_softc *);
 static int	iavf_get_vf_resources(struct iavf_softc *);
+static int	iavf_config_rss_key(struct iavf_softc *);
+static int	iavf_config_rss_lut(struct iavf_softc *);
 static int	iavf_config_irq_map(struct iavf_softc *);
 
 static int	iavf_add_del_addr(struct iavf_softc *, uint8_t *, int);
@@ -1251,7 +1277,7 @@ iavf_config_vsi_queues(struct iavf_softc *sc)
 
 		txq = &config->qpair[i].txq;
 		txq->vsi_id = htole16(sc->sc_vsi_id);
-		txq->queue_id = htole16(i);
+		txq->queue_id = htole16(txr->txr_qid);
 		txq->ring_len = sc->sc_tx_ring_ndescs;
 		txq->headwb_ena = 0;
 		htolem64(&txq->dma_ring_addr, IAVF_DMA_DVA(&txr->txr_mem));
@@ -1259,7 +1285,7 @@ iavf_config_vsi_queues(struct iavf_softc *sc)
 
 		rxq = &config->qpair[i].rxq;
 		rxq->vsi_id = htole16(sc->sc_vsi_id);
-		rxq->queue_id = htole16(i);
+		rxq->queue_id = htole16(rxr->rxr_qid);
 		rxq->ring_len = sc->sc_rx_ring_ndescs;
 		rxq->splithdr_ena = 0;
 		rxq->databuf_size = htole32(MCLBYTES);
@@ -1307,7 +1333,72 @@ iavf_config_hena(struct iavf_softc *sc)
 		return (1);
 	}
 
-	caps = IAVF_DMA_KVA(&sc->sc_scratch);
+	return (0);
+}
+
+static int
+iavf_config_rss_key(struct iavf_softc *sc)
+{
+	struct iavf_aq_desc iaq;
+	struct iavf_vc_rss_key *rss_key;
+	size_t key_len = IAVF_RSS_KEY_SIZE;
+	int rv;
+
+	memset(&iaq, 0, sizeof(iaq));
+	iaq.iaq_flags = htole16(IAVF_AQ_BUF | IAVF_AQ_RD);
+	iaq.iaq_opcode = htole16(IAVF_AQ_OP_SEND_TO_PF);
+	iaq.iaq_vc_opcode = htole32(IAVF_VC_OP_CONFIG_RSS_KEY);
+	iaq.iaq_datalen = htole16(sizeof(*rss_key) - sizeof(rss_key->pad)
+				  + (sizeof(rss_key->key[0]) * key_len));
+	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
+
+	rss_key = IAVF_DMA_KVA(&sc->sc_scratch);
+	rss_key->vsi_id = htole16(sc->sc_vsi_id);
+	stoeplitz_to_key(&rss_key->key, key_len);
+	rss_key->key_len = key_len;
+	rss_key->key[key_len] = 0;
+
+	iavf_atq_post(sc, &iaq);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
+	if (rv != IAVF_VC_RC_SUCCESS) {
+		printf("%s: CONFIG_RSS_KEY failed: %d\n", DEVNAME(sc), rv);
+		return (1);
+	}
+
+	return (0);
+}
+
+static int
+iavf_config_rss_lut(struct iavf_softc *sc)
+{
+	struct iavf_aq_desc iaq;
+	struct iavf_vc_rss_lut *rss_lut;
+	uint8_t *lut;
+	int i, rv;
+
+	memset(&iaq, 0, sizeof(iaq));
+	iaq.iaq_flags = htole16(IAVF_AQ_BUF | IAVF_AQ_RD);
+	iaq.iaq_opcode = htole16(IAVF_AQ_OP_SEND_TO_PF);
+	iaq.iaq_vc_opcode = htole32(IAVF_VC_OP_CONFIG_RSS_LUT);
+	iaq.iaq_datalen = htole16(sizeof(*rss_lut) - sizeof(rss_lut->pad)
+		+ (sizeof(rss_lut->lut[0]) * IAVF_RSS_VSI_LUT_SIZE));
+	iavf_aq_dva(&iaq, IAVF_DMA_DVA(&sc->sc_scratch));
+
+	rss_lut = IAVF_DMA_KVA(&sc->sc_scratch);
+	rss_lut->vsi_id = htole16(sc->sc_vsi_id);
+	rss_lut->lut_entries = htole16(IAVF_RSS_VSI_LUT_SIZE);
+
+	lut = rss_lut->lut;
+	for (i = 0; i < IAVF_RSS_VSI_LUT_SIZE; i++)
+		lut[i] = (i % iavf_nqueues(sc)) & IAVF_RSS_VSI_LUT_ENTRY_MASK;
+	rss_lut->lut[i] = 0;
+
+	iavf_atq_post(sc, &iaq);
+	rv = iavf_arq_wait(sc, IAVF_EXEC_TIMEOUT);
+	if (rv != IAVF_VC_RC_SUCCESS) {
+		printf("%s: CONFIG_RSS_LUT failed: %d\n", DEVNAME(sc), rv);
+		return (1);
+	}
 
 	return (0);
 }
@@ -1386,7 +1477,9 @@ iavf_up(struct iavf_softc *sc)
 	if (iavf_config_vsi_queues(sc) != 0)
 		goto down;
 
-	if (iavf_config_hena(sc) != 0)
+	if (iavf_config_hena(sc) != 0 ||
+	    iavf_config_rss_key(sc) != 0 ||
+	    iavf_config_rss_lut(sc) != 0)
 		goto down;
 
 	if (iavf_queue_select(sc, IAVF_VC_OP_ENABLE_QUEUES) != 0)
@@ -2661,6 +2754,8 @@ iavf_process_arq(struct iavf_softc *sc, int fill)
 		case IAVF_VC_OP_ADD_ETH_ADDR:
 		case IAVF_VC_OP_DEL_ETH_ADDR:
 		case IAVF_VC_OP_CONFIG_PROMISC:
+		case IAVF_VC_OP_CONFIG_RSS_KEY:
+		case IAVF_VC_OP_CONFIG_RSS_LUT:
 			sc->sc_admin_result = letoh32(iaq->iaq_vc_retval);
 			cond_signal(&sc->sc_admin_cond);
 			break;
