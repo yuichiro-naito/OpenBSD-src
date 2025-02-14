@@ -1275,7 +1275,7 @@ iavf_config_vsi_queues(struct iavf_softc *sc)
 		txq = &config->qpair[i].txq;
 		txq->vsi_id = htole16(sc->sc_vsi_id);
 		txq->queue_id = htole16(txr->txr_qid);
-		txq->ring_len = sc->sc_tx_ring_ndescs;
+		txq->ring_len = htole16(sc->sc_tx_ring_ndescs);
 		txq->headwb_ena = 0;
 		htolem64(&txq->dma_ring_addr, IAVF_DMA_DVA(&txr->txr_mem));
 		txq->dma_headwb_addr = 0;
@@ -1283,7 +1283,7 @@ iavf_config_vsi_queues(struct iavf_softc *sc)
 		rxq = &config->qpair[i].rxq;
 		rxq->vsi_id = htole16(sc->sc_vsi_id);
 		rxq->queue_id = htole16(rxr->rxr_qid);
-		rxq->ring_len = sc->sc_rx_ring_ndescs;
+		rxq->ring_len = htole16(sc->sc_rx_ring_ndescs);
 		rxq->splithdr_ena = 0;
 		rxq->databuf_size = htole32(MCLBYTES);
 		rxq->max_pkt_size = htole32(IAVF_HARDMTU);
