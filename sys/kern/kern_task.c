@@ -156,7 +156,7 @@ taskq_create2(const char *name, unsigned int nthreads, int ipl,
 	tq->tq_nthreads = nthreads;
 	tq->tq_name = name;
 	tq->tq_flags = flags;
-	tq->tq_bind_cpu = (cpu >= 0 && cpu < ncpus) ? cpu : -1;
+	tq->tq_bind_cpu = cpu;
 
 	mtx_init_flags(&tq->tq_mtx, ipl, name, 0);
 	TAILQ_INIT(&tq->tq_worklist);
