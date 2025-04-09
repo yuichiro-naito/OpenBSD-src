@@ -373,6 +373,7 @@ struct proc {
 	fixpt_t	p_pctcpu;		/* [S] %cpu for this thread */
 	u_int	p_slptime;		/* [S] Time since last blocked. */
 	struct	cpu_info * volatile p_cpu; /* [S] CPU we're running on. */
+	struct	cpu_info * p_bind_cpu;  /* [I] runs on this CPU. */
 
 	struct	rusage p_ru;		/* Statistics */
 	struct	tusage p_tu;		/* [o] accumulated times. */

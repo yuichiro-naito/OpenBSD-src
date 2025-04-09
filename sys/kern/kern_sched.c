@@ -271,7 +271,9 @@ setrunqueue(struct cpu_info *ci, struct proc *p, uint8_t prio)
 	struct schedstate_percpu *spc;
 	int queue = prio >> 2;
 
-	if (ci == NULL)
+	if (p->p_bind_cpu != NULL)
+		ci = p->p_bind_cpu;
+	else if (ci == NULL)
 		ci = sched_choosecpu(p);
 
 	KASSERT(ci != NULL);
