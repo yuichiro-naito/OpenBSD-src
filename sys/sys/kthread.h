@@ -42,6 +42,8 @@
 struct proc;
 int	kthread_create(void (*)(void *), void *, struct proc **,
 	    const char *);
+int	kthread_create2(void (*)(void *), void *, struct proc **,
+	    const char *, int);
 void	kthread_create_deferred(void (*)(void *), void *);
 void	kthread_run_deferred_queue(void);
 void	kthread_exit(int) __attribute__((__noreturn__));

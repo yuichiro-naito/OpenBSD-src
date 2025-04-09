@@ -348,8 +348,8 @@ fork_thread_start(struct proc *p, struct proc *parent, int flags)
 }
 
 int
-fork1(struct proc *curp, int flags, void (*func)(void *), void *arg,
-    register_t *retval, struct proc **rnewprocp)
+fork2(struct proc *curp, int flags, void (*func)(void *), void *arg,
+      register_t *retval, struct proc **rnewprocp, int cpu)
 {
 	struct process *curpr = curp->p_p;
 	struct process *pr;
@@ -486,6 +486,9 @@ fork1(struct proc *curp, int flags, void (*func)(void *), void *arg,
 	pr->ps_acflag = AFORK;
 	atomic_clearbits_int(&pr->ps_flags, PS_EMBRYO);
 
+	if (cpu >= 0 && cpu < ncpus)
+		p->p_bind_cpu = cpu_info[cpu];
+
 	if ((flags & FORK_IDLE) == 0)
 		fork_thread_start(p, curp, flags);
 	else
@@ -536,6 +539,13 @@ fork1(struct proc *curp, int flags, void (*func)(void *), void *arg,
 	if (retval != NULL)
 		*retval = pr->ps_pid;
 	return (0);
+}
+
+int
+fork1(struct proc *curp, int flags, void (*func)(void *), void *arg,
+      register_t *retval, struct proc **rnewprocp)
+{
+	return fork2(curp, flags, func, arg, retval, rnewprocp, -1);
 }
 
 int

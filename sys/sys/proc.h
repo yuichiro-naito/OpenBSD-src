@@ -578,6 +578,8 @@ void	cpu_exit(struct proc *);
 void	process_initialize(struct process *, struct proc *);
 int	fork1(struct proc *_curp, int _flags, void (*_func)(void *),
 	    void *_arg, register_t *_retval, struct proc **_newprocp);
+int	fork2(struct proc *_curp, int _flags, void (*_func)(void *),
+	    void *_arg, register_t *_retval, struct proc **_newprocp, int);
 int	thread_fork(struct proc *_curp, void *_stack, void *_tcb,
 	    pid_t *_tidptr, register_t *_retval);
 int	groupmember(gid_t, struct ucred *);
