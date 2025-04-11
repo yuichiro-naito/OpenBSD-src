@@ -278,8 +278,8 @@ ifinit(void)
 	for (i = 0; i < NET_TASKQ; i++) {
 		struct softnet *sn = &softnets[i];
 		snprintf(sn->sn_name, sizeof(sn->sn_name), "softnet%u", i);
-		sn->sn_taskq = taskq_create(sn->sn_name, 1, IPL_NET,
-		    TASKQ_MPSAFE);
+		sn->sn_taskq = taskq_create2(sn->sn_name, 1, IPL_NET,
+		     TASKQ_MPSAFE, i + 1);
 		if (sn->sn_taskq == NULL)
 			panic("unable to create network taskq %d", i);
 	}
