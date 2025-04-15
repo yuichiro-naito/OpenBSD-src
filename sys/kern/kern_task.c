@@ -70,6 +70,7 @@ struct taskq {
 #ifdef WITNESS
 	struct lock_object	 tq_lock_object;
 #endif
+	int			 tq_bind_cpu;
 };
 
 static const char taskq_sys_name[] = "systq";
@@ -141,8 +142,8 @@ taskq_init(void)
 }
 
 struct taskq *
-taskq_create(const char *name, unsigned int nthreads, int ipl,
-    unsigned int flags)
+taskq_create2(const char *name, unsigned int nthreads, int ipl,
+      unsigned int flags, int cpu)
 {
 	struct taskq *tq;
 
@@ -155,6 +156,7 @@ taskq_create(const char *name, unsigned int nthreads, int ipl,
 	tq->tq_nthreads = nthreads;
 	tq->tq_name = name;
 	tq->tq_flags = flags;
+	tq->tq_bind_cpu = cpu;
 
 	mtx_init_flags(&tq->tq_mtx, ipl, name, 0);
 	TAILQ_INIT(&tq->tq_worklist);
@@ -175,6 +177,13 @@ taskq_create(const char *name, unsigned int nthreads, int ipl,
 	kthread_create_deferred(taskq_create_thread, tq);
 
 	return (tq);
+}
+
+struct taskq *
+taskq_create(const char *name, unsigned int nthreads, int ipl,
+    unsigned int flags)
+{
+	return taskq_create2(name, nthreads, ipl, flags, -1);
 }
 
 void
@@ -232,7 +241,8 @@ taskq_create_thread(void *arg)
 		tq->tq_running++;
 		mtx_leave(&tq->tq_mtx);
 
-		rv = kthread_create(taskq_thread, tq, NULL, tq->tq_name);
+		rv = kthread_create2(taskq_thread, tq, NULL, tq->tq_name,
+			tq->tq_bind_cpu);
 
 		mtx_enter(&tq->tq_mtx);
 		if (rv != 0) {

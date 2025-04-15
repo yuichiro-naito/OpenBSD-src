@@ -109,7 +109,7 @@ intrmap_cpus_get(void)
 #endif
 			cpumap[icpus++] = ci;
 		}
-
+		icpus /= 2;
 		if (icpus < ncpus) {
 			/* this is mostly about free(9) needing a size */
 			struct cpu_info **icpumap = mallocarray(icpus,

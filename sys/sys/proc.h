@@ -373,6 +373,7 @@ struct proc {
 	fixpt_t	p_pctcpu;		/* [S] %cpu for this thread */
 	u_int	p_slptime;		/* [S] Time since last blocked. */
 	struct	cpu_info * volatile p_cpu; /* [S] CPU we're running on. */
+	struct	cpu_info * p_bind_cpu;  /* [I] runs on this CPU. */
 
 	struct	rusage p_ru;		/* Statistics */
 	struct	tusage p_tu;		/* [o] accumulated times. */
@@ -577,6 +578,8 @@ void	cpu_exit(struct proc *);
 void	process_initialize(struct process *, struct proc *);
 int	fork1(struct proc *_curp, int _flags, void (*_func)(void *),
 	    void *_arg, register_t *_retval, struct proc **_newprocp);
+int	fork2(struct proc *_curp, int _flags, void (*_func)(void *),
+	    void *_arg, register_t *_retval, struct proc **_newprocp, int);
 int	thread_fork(struct proc *_curp, void *_stack, void *_tcb,
 	    pid_t *_tidptr, register_t *_retval);
 int	groupmember(gid_t, struct ucred *);

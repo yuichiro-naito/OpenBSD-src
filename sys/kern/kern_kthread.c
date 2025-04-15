@@ -45,8 +45,8 @@ int	kthread_create_now;
  * The VM space and limits, etc. will be shared with proc0.
  */
 int
-kthread_create(void (*func)(void *), void *arg,
-    struct proc **newpp, const char *name)
+kthread_create2(void (*func)(void *), void *arg,
+	struct proc **newpp, const char *name, int cpu)
 {
 	struct proc *p;
 	int error;
@@ -58,8 +58,8 @@ kthread_create(void (*func)(void *), void *arg,
 	 * descriptors and don't leave the exit status around for the
 	 * parent to wait for.
 	 */
-	error = fork1(&proc0, FORK_SHAREVM|FORK_SHAREFILES|FORK_NOZOMBIE|
-	    FORK_SYSTEM, func, arg, NULL, &p);
+	error = fork2(&proc0, FORK_SHAREVM|FORK_SHAREFILES|FORK_NOZOMBIE|
+	      FORK_SYSTEM, func, arg, NULL, &p, cpu);
 	if (error) {
 		KERNEL_UNLOCK();
 		return (error);
@@ -74,6 +74,12 @@ kthread_create(void (*func)(void *), void *arg,
 	if (newpp != NULL)
 		*newpp = p;
 	return (0);
+}
+int
+kthread_create(void (*func)(void *), void *arg,
+    struct proc **newpp, const char *name)
+{
+	return kthread_create2(func, arg, newpp, name, -1);
 }
 
 /*
