@@ -35,6 +35,7 @@
 #ifndef _SYS_GMON_H_
 #define _SYS_GMON_H_
 
+#include <sys/queue.h>
 #include <machine/profile.h>
 
 /*
@@ -141,6 +142,7 @@ struct gmonparam {
 	size_t		outbuflen;
 	void		*rawarcs;
 	int		dirfd;
+	SLIST_ENTRY(gmonparam)	next;
 };
 
 /*

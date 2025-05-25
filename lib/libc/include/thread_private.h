@@ -5,6 +5,10 @@
 #ifndef _THREAD_PRIVATE_H_
 #define _THREAD_PRIVATE_H_
 
+#include <sys/types.h>
+#include <sys/gmon.h>
+#include <stdio.h>		/* for FILE and __isthreaded */
+
 extern int __isthreaded;
 
 #define _MALLOC_MUTEXES 32
@@ -390,6 +394,7 @@ struct pthread {
 
 	/* cancel received in a delayed cancel block? */
 	int delayed_cancel;
+	struct gmonparam *gmonparam;
 };
 /* flags in pthread->flags */
 #define	THREAD_DONE		0x001
