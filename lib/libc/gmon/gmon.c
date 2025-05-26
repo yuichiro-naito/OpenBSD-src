@@ -47,7 +47,7 @@ struct gmonparam _gmonparam = { GMON_PROF_OFF };
 
 SLIST_HEAD(, gmonparam) _gmonfree = SLIST_HEAD_INITIALIZER(_gmonfree);
 SLIST_HEAD(, gmonparam) _gmoninuse = SLIST_HEAD_INITIALIZER(_gmoninuse);
-void* _gmonlock = NULL;
+_THREAD_PRIVATE_MUTEX(_gmonlock);
 pthread_key_t _gmonkey;
 struct gmonparam _gmondummy;
 
@@ -164,10 +164,10 @@ _gmon_destructor(void *arg)
 
 	pthread_setspecific(_gmonkey, &_gmondummy);
 
-	_MUTEX_LOCK(&_gmonlock);
+	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 	SLIST_REMOVE(&_gmoninuse, p, gmonparam, next);
 	SLIST_INSERT_HEAD(&_gmonfree, p, next);
-	_MUTEX_UNLOCK(&_gmonlock);
+	_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 
 	pthread_setspecific(_gmonkey, NULL);
 }
@@ -178,13 +178,13 @@ _gmon_alloc(void)
 	void *addr;
 	struct gmonparam *p;
 
-	_MUTEX_LOCK(&_gmonlock);
+	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 	p = SLIST_FIRST(&_gmonfree);
 	if (p != NULL) {
 		SLIST_REMOVE_HEAD(&_gmonfree, next);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	} else {
-		_MUTEX_UNLOCK(&_gmonlock);
+		_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 		p = mmap(NULL, sizeof (struct gmonparam),
 			 PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
 		if (p == MAP_FAILED)
@@ -205,10 +205,10 @@ _gmon_alloc(void)
 		if (addr == MAP_FAILED)
 			goto mapfailed;
 		p->tos = addr;
-		_MUTEX_LOCK(&_gmonlock);
+		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	}
-	_MUTEX_UNLOCK(&_gmonlock);
+	_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 	pthread_setspecific(_gmonkey, p);
 
 	return p;
@@ -326,7 +326,7 @@ _gmon_merge(void)
 {
 	struct gmonparam *q;
 
-	_MUTEX_LOCK(&_gmonlock);
+	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 
 	SLIST_FOREACH(q, &_gmonfree, next)
 		_gmon_merge_two(&_gmonparam, q);
@@ -336,7 +336,7 @@ _gmon_merge(void)
 		_gmon_merge_two(&_gmonparam, q);
 	}
 
-	_MUTEX_UNLOCK(&_gmonlock);
+	_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 }
 
 
