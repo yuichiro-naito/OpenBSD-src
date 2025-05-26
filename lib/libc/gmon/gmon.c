@@ -144,10 +144,9 @@ _monstartup(u_long lowpc, u_long highpc)
 	else
 		p->dirfd = -1;
 
-#ifndef _KERNEL
 	_gmondummy.state = GMON_PROF_BUSY;
 	pthread_key_create(&_gmonkey, _gmon_destructor);
-#endif
+
 	moncontrol(1);
 
 	if (p->dirfd != -1)
@@ -383,9 +382,9 @@ _mcleanup(void)
 	    p->kcount, p->kcountsize);
 	write(log, dbuf, strlen(dbuf));
 #endif
-#ifndef _KERNEL
+
 	_gmon_merge();
-#endif
+
 	hdr = (struct gmonhdr *)p->outbuf;
 	hdr->lpc = p->lowpc;
 	hdr->hpc = p->highpc;
