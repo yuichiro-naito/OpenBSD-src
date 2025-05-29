@@ -49,7 +49,6 @@ SLIST_HEAD(, gmonparam) _gmonfree = SLIST_HEAD_INITIALIZER(_gmonfree);
 SLIST_HEAD(, gmonparam) _gmoninuse = SLIST_HEAD_INITIALIZER(_gmoninuse);
 _THREAD_PRIVATE_MUTEX(_gmonlock);
 pthread_key_t _gmonkey;
-struct gmonparam _gmondummy;
 
 static int	s_scale;
 /* see profil(2) where this is describe (incorrectly) */
@@ -73,6 +72,7 @@ monstartup(u_long lowpc, u_long highpc)
 
 static void _gmon_destructor(void *);
 struct gmonparam *_gmon_alloc(void);
+PROTO_NORMAL(_gmon_alloc);
 static void _gmon_merge(void);
 static void _gmon_merge_two(struct gmonparam *, struct gmonparam *);
 
@@ -144,7 +144,6 @@ _monstartup(u_long lowpc, u_long highpc)
 	else
 		p->dirfd = -1;
 
-	_gmondummy.state = GMON_PROF_BUSY;
 	pthread_key_create(&_gmonkey, _gmon_destructor);
 
 	moncontrol(1);
@@ -157,11 +156,6 @@ static void
 _gmon_destructor(void *arg)
 {
 	struct gmonparam *p = arg, *q, **prev;
-
-	if (p == &_gmondummy)
-		return;
-
-	pthread_setspecific(_gmonkey, &_gmondummy);
 
 	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 	SLIST_REMOVE(&_gmoninuse, p, gmonparam, next);
@@ -176,6 +170,9 @@ _gmon_alloc(void)
 {
 	void *addr;
 	struct gmonparam *p;
+
+	if (_gmonparam.state == GMON_PROF_OFF)
+		return NULL;
 
 	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 	p = SLIST_FIRST(&_gmonfree);
@@ -226,6 +223,7 @@ mapfailed_2:
 	ERR("_gmon_alloc: out of memory\n");
 	return NULL;
 }
+DEF_WEAK(_gmon_alloc);
 
 static void
 _gmon_merge_two(struct gmonparam *p, struct gmonparam *q)

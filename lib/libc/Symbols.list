@@ -1792,3 +1792,6 @@ yperr_string
 ypprot_err
 _yp_check		/* chpass, passwd, login_chpass */
 yp_unbind
+
+/* gmon */
+_gmon_alloc

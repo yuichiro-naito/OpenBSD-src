@@ -176,6 +176,7 @@ void	_monstartup(u_long, u_long);
 void	moncontrol(int);
 /* XXX remove end of may 2025 */
 void	monstartup(u_long, u_long);
+struct gmonparam *_gmon_alloc(void);
 __END_DECLS
 
 #endif /* !_KERNEL */
