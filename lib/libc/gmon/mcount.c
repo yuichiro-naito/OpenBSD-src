@@ -32,7 +32,6 @@
 #include <sys/gmon.h>
 
 #ifndef _KERNEL
-#include <stdio.h>		/* for the use of '__isthreaded'. */
 #include <pthread.h>
 #include <thread_private.h>
 #include <tib.h>
