@@ -880,6 +880,7 @@ _mcleanup
 _monstartup
 moncontrol
 monstartup
+_gmon_alloc
 
 /* hash */
 MD5Data
@@ -1792,6 +1793,3 @@ yperr_string
 ypprot_err
 _yp_check		/* chpass, passwd, login_chpass */
 yp_unbind
-
-/* gmon */
-_gmon_alloc
