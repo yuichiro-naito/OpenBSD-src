@@ -28,12 +28,14 @@
  * SUCH DAMAGE.
  */
 
+#include <sys/param.h>
 #include <sys/time.h>
 #include <sys/gmon.h>
 #include <sys/mman.h>
 #include <sys/sysctl.h>
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
@@ -167,8 +169,8 @@ _gmon_destructor(void *arg)
 struct gmonparam *
 _gmon_alloc(void)
 {
-	void *addr;
 	struct gmonparam *p;
+	size_t param_sz, from_sz, to_sz;
 
 	if (_gmonparam.state == GMON_PROF_OFF)
 		return NULL;
@@ -180,26 +182,21 @@ _gmon_alloc(void)
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	} else {
 		_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
-		p = mmap(NULL, sizeof (struct gmonparam),
+		param_sz = ALIGN(sizeof(struct gmonparam));
+		from_sz = ALIGN(_gmonparam.fromssize);
+		to_sz  = ALIGN(_gmonparam.tossize);
+		p = mmap(NULL, param_sz + from_sz + to_sz,
 			 PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
-		if (p == MAP_FAILED)
-			goto mapfailed_2;
+		if (p == MAP_FAILED) {
+			pthread_setspecific(_gmonkey, NULL);
+			ERR("_gmon_alloc: out of memory\n");
+			return NULL;
+		}
 		*p = _gmonparam;
 		p->kcount = NULL;
 		p->kcountsize = 0;
-		p->froms = NULL;
-		p->tos = NULL;
-		addr = mmap(NULL, p->fromssize, PROT_READ|PROT_WRITE,
-			    MAP_ANON|MAP_PRIVATE, -1, 0);
-		if (addr == MAP_FAILED)
-			goto mapfailed;
-		p->froms = addr;
-
-		addr = mmap(NULL, p->tossize, PROT_READ|PROT_WRITE,
-			    MAP_ANON|MAP_PRIVATE, -1, 0);
-		if (addr == MAP_FAILED)
-			goto mapfailed;
-		p->tos = addr;
+		p->froms = (void *)((uintptr_t)p + param_sz);
+		p->tos = (void *)((uintptr_t)p + param_sz + from_sz);
 		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	}
@@ -207,20 +204,6 @@ _gmon_alloc(void)
 	pthread_setspecific(_gmonkey, p);
 
 	return p;
-
-mapfailed:
-	if (p->froms != NULL) {
-		munmap(p->froms, p->fromssize);
-		p->froms = NULL;
-	}
-	if (p->tos != NULL) {
-		munmap(p->tos, p->tossize);
-		p->tos = NULL;
-	}
-mapfailed_2:
-	pthread_setspecific(_gmonkey, NULL);
-	ERR("_gmon_alloc: out of memory\n");
-	return NULL;
 }
 DEF_WEAK(_gmon_alloc);
 
