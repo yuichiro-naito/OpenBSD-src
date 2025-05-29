@@ -28,12 +28,14 @@
  * SUCH DAMAGE.
  */
 
+#include <sys/param.h>
 #include <sys/time.h>
 #include <sys/gmon.h>
 #include <sys/mman.h>
 #include <sys/sysctl.h>
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
@@ -78,6 +80,7 @@ _monstartup(u_long lowpc, u_long highpc)
 	struct gmonparam *p = &_gmonparam;
 	char *profdir = NULL;
 	void *addr;
+	size_t out_sz, from_sz, to_sz;
 
 	/*
 	 * round lowpc and highpc to multiples of the density we're using
@@ -100,25 +103,20 @@ _monstartup(u_long lowpc, u_long highpc)
 	    MAXARCS * sizeof(struct rawarc);
 
 	/* Create a contig output buffer */
-	addr = mmap(NULL, p->outbuflen,  PROT_READ|PROT_WRITE,
+	out_sz = ALIGN(p->outbuflen);
+	from_sz = ALIGN(p->fromssize);
+	to_sz = ALIGN(p->tossize);
+	addr = mmap(NULL, out_sz + from_sz + to_sz, PROT_READ|PROT_WRITE,
 	    MAP_ANON|MAP_PRIVATE, -1, 0);
-	if (addr == MAP_FAILED)
-		goto mapfailed;
+	if (addr == MAP_FAILED) {
+		ERR("_monstartup: out of memory\n");
+		return;
+	}
 	p->outbuf = addr;
-	p->kcount = (void *)((char *)addr + sizeof(struct gmonhdr));
-	p->rawarcs = (void *)((char *)addr + sizeof(struct gmonhdr) + p->kcountsize);
-
-	addr = mmap(NULL, p->fromssize,  PROT_READ|PROT_WRITE,
-	    MAP_ANON|MAP_PRIVATE, -1, 0);
-	if (addr == MAP_FAILED)
-		goto mapfailed;
-	p->froms = addr;
-
-	addr = mmap(NULL, p->tossize,  PROT_READ|PROT_WRITE,
-	    MAP_ANON|MAP_PRIVATE, -1, 0);
-	if (addr == MAP_FAILED)
-		goto mapfailed;
-	p->tos = addr;
+	p->kcount = (void *)((uintptr_t)addr + sizeof(struct gmonhdr));
+	p->rawarcs = (void *)((uintptr_t)addr + sizeof(struct gmonhdr) + p->kcountsize);
+	p->froms = (void *)((uintptr_t)addr + out_sz);
+	p->tos = (void *)((uintptr_t)addr + out_sz + from_sz);
 	p->tos[0].link = 0;
 
 	o = p->highpc - p->lowpc;
@@ -154,17 +152,6 @@ _monstartup(u_long lowpc, u_long highpc)
 	if (p->dirfd != -1)
 		close(p->dirfd);
 	return;
-
-mapfailed:
-	if (p->froms != NULL) {
-		munmap(p->froms, p->fromssize);
-		p->froms = NULL;
-	}
-	if (p->tos != NULL) {
-		munmap(p->tos, p->tossize);
-		p->tos = NULL;
-	}
-	ERR("_monstartup: out of memory\n");
 }
 
 static void
@@ -183,8 +170,8 @@ _gmon_destructor(void *arg)
 struct gmonparam *
 _gmon_alloc(void)
 {
-	void *addr;
 	struct gmonparam *p;
+	size_t param_sz, from_sz, to_sz;
 
 	if (_gmonparam.state == GMON_PROF_OFF)
 		return NULL;
@@ -196,26 +183,21 @@ _gmon_alloc(void)
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	} else {
 		_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
-		p = mmap(NULL, sizeof (struct gmonparam),
+		param_sz = ALIGN(sizeof(struct gmonparam));
+		from_sz = ALIGN(_gmonparam.fromssize);
+		to_sz  = ALIGN(_gmonparam.tossize);
+		p = mmap(NULL, param_sz + from_sz + to_sz,
 			 PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
-		if (p == MAP_FAILED)
-			goto mapfailed_2;
+		if (p == MAP_FAILED) {
+			pthread_setspecific(_gmonkey, NULL);
+			ERR("_gmon_alloc: out of memory\n");
+			return NULL;
+		}
 		*p = _gmonparam;
 		p->kcount = NULL;
 		p->kcountsize = 0;
-		p->froms = NULL;
-		p->tos = NULL;
-		addr = mmap(NULL, p->fromssize, PROT_READ|PROT_WRITE,
-			    MAP_ANON|MAP_PRIVATE, -1, 0);
-		if (addr == MAP_FAILED)
-			goto mapfailed;
-		p->froms = addr;
-
-		addr = mmap(NULL, p->tossize, PROT_READ|PROT_WRITE,
-			    MAP_ANON|MAP_PRIVATE, -1, 0);
-		if (addr == MAP_FAILED)
-			goto mapfailed;
-		p->tos = addr;
+		p->froms = (void *)((uintptr_t)p + param_sz);
+		p->tos = (void *)((uintptr_t)p + param_sz + from_sz);
 		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	}
@@ -223,20 +205,6 @@ _gmon_alloc(void)
 	pthread_setspecific(_gmonkey, p);
 
 	return p;
-
-mapfailed:
-	if (p->froms != NULL) {
-		munmap(p->froms, p->fromssize);
-		p->froms = NULL;
-	}
-	if (p->tos != NULL) {
-		munmap(p->tos, p->tossize);
-		p->tos = NULL;
-	}
-mapfailed_2:
-	pthread_setspecific(_gmonkey, NULL);
-	ERR("_gmon_alloc: out of memory\n");
-	return NULL;
 }
 DEF_WEAK(_gmon_alloc);
 
