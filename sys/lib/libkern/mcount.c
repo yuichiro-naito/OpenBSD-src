@@ -33,6 +33,12 @@
 #include <sys/param.h>
 #include <sys/gmon.h>
 
+#ifndef _KERNEL
+#include <pthread.h>
+#include <thread_private.h>
+#include <tib.h>
+#endif
+
 /*
  * mcount is called on entry to each function compiled with the profiling
  * switch set.  _mcount(), which is declared in a machine-dependent way
@@ -67,7 +73,12 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 	if ((p = curcpu()->ci_gmon) == NULL)
 		return;
 #else
-	p = &_gmonparam;
+	if (__isthreaded) {
+		pthread_t t = TIB_GET()->tib_thread;
+		if ((p = t->gmonparam) == NULL)
+			return;
+	} else
+		p = &_gmonparam;
 #endif
 	/*
 	 * check that we are profiling

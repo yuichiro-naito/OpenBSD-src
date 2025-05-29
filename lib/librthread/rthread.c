@@ -25,6 +25,7 @@
 #include <elf.h>
 #pragma weak _DYNAMIC
 #endif
+#include <sys/gmon.h>
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -393,6 +394,10 @@ pthread_create(pthread_t *threadp, const pthread_attr_t *attr,
 
 	/* we're going to be multi-threaded real soon now */
 	__isthreaded = 1;
+
+	/* Ignore errors. NULL is OK for a non-profiling case. */
+	thread->gmonparam = _gmon_alloc();
+
 	rc = __tfork_thread(&param, sizeof(param), _rthread_start, thread);
 	if (rc != -1) {
 		/* success */
