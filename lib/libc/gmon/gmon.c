@@ -72,7 +72,6 @@ monstartup(u_long lowpc, u_long highpc)
 #define PAGESIZE	(1UL << _MAX_PAGE_SHIFT)
 #define PAGEMASK	(PAGESIZE - 1)
 #define PAGEROUND(x)	(((x) + (PAGEMASK)) & ~PAGEMASK)
-
 static void _gmon_destructor(void *);
 static void _gmon_merge(void);
 static void _gmon_merge_two(struct gmonparam *, struct gmonparam *);
