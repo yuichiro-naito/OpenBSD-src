@@ -56,6 +56,7 @@ static int	s_scale;
 
 #define ERR(s) write(STDERR_FILENO, s, sizeof(s))
 
+PROTO_NORMAL(_gmon_alloc);
 PROTO_NORMAL(moncontrol);
 PROTO_DEPRECATED(monstartup);
 
@@ -71,8 +72,6 @@ monstartup(u_long lowpc, u_long highpc)
 #define PAGEROUND(x)	(((x) + (PAGEMASK)) & ~PAGEMASK)
 
 static void _gmon_destructor(void *);
-struct gmonparam *_gmon_alloc(void);
-PROTO_NORMAL(_gmon_alloc);
 static void _gmon_merge(void);
 static void _gmon_merge_two(struct gmonparam *, struct gmonparam *);
 
