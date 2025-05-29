@@ -38,8 +38,6 @@
 #include <pthread.h>
 #include <thread_private.h>
 #include <tib.h>
-extern struct gmonparam _gmondummy;
-struct gmonparam *_gmon_alloc(void);
 #endif
 
 /*
@@ -77,19 +75,9 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 		return;
 #else
 	if (__isthreaded) {
-		if (_gmonparam.state != GMON_PROF_ON)
-			return;
 		pthread_t t = TIB_GET()->tib_thread;
-		p = t->gmonparam;
-		if (p == &_gmondummy)
+		if ((p = t->gmonparam) == NULL)
 			return;
-		if (p == NULL) {
-			/* prevent recursive call of _gmon_alloc(). */
-			t->gmonparam = &_gmondummy;
-			if ((t->gmonparam = _gmon_alloc()) == NULL)
-				return;
-			p = t->gmonparam;
-		}
 	} else
 		p = &_gmonparam;
 #endif
