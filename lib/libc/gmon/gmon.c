@@ -69,6 +69,9 @@ monstartup(u_long lowpc, u_long highpc)
 	abort();
 }
 
+#define PAGESIZE	(1UL << _MAX_PAGE_SHIFT)
+#define PAGEMASK	(PAGESIZE - 1)
+#define PAGEROUND(x)	(((x) + (PAGEMASK)) & ~PAGEMASK)
 static void _gmon_destructor(void *);
 static void _gmon_merge(void);
 static void _gmon_merge_two(struct gmonparam *, struct gmonparam *);
@@ -79,8 +82,7 @@ _monstartup(u_long lowpc, u_long highpc)
 	int o;
 	struct gmonparam *p = &_gmonparam;
 	char *profdir = NULL;
-	void *addr;
-	size_t out_sz, from_sz, to_sz;
+	char *a;
 
 	/*
 	 * round lowpc and highpc to multiples of the density we're using
@@ -102,22 +104,19 @@ _monstartup(u_long lowpc, u_long highpc)
 	p->outbuflen = sizeof(struct gmonhdr) + p->kcountsize +
 	    MAXARCS * sizeof(struct rawarc);
 
-	/* Create a contig output buffer */
-	out_sz = ALIGN(p->outbuflen);
-	from_sz = ALIGN(p->fromssize);
-	to_sz = ALIGN(p->tossize);
-	addr = mmap(NULL, out_sz + from_sz + to_sz, PROT_READ|PROT_WRITE,
-	    MAP_ANON|MAP_PRIVATE, -1, 0);
-	if (addr == MAP_FAILED) {
+	/* Create a contig output buffer, with froms/tos tables after */
+	a = mmap(NULL,
+	    PAGEROUND(p->outbuflen) + _ALIGN(p->fromssize) + _ALIGN(p->tossize),
+	    PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+	if (a == MAP_FAILED) {
 		ERR("_monstartup: out of memory\n");
 		return;
 	}
-	p->outbuf = addr;
-	p->kcount = (void *)((uintptr_t)addr + sizeof(struct gmonhdr));
-	p->rawarcs = (void *)((uintptr_t)addr + sizeof(struct gmonhdr) + p->kcountsize);
-	p->froms = (void *)((uintptr_t)addr + out_sz);
-	p->tos = (void *)((uintptr_t)addr + out_sz + from_sz);
-	p->tos[0].link = 0;
+	p->outbuf = a;
+	p->kcount = (void *)(a + sizeof(struct gmonhdr));
+	p->rawarcs = (void *)(a + sizeof(struct gmonhdr) + p->kcountsize);
+	p->froms = (void *)(a + PAGEROUND(p->outbuflen));
+	p->tos = (void *)(a + PAGEROUND(p->outbuflen) + _ALIGN(p->fromssize));
 
 	o = p->highpc - p->lowpc;
 	if (p->kcountsize < o) {
@@ -151,7 +150,6 @@ _monstartup(u_long lowpc, u_long highpc)
 
 	if (p->dirfd != -1)
 		close(p->dirfd);
-	return;
 }
 
 static void
