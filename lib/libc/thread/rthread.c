@@ -21,6 +21,7 @@
 
 #include <sys/types.h>
 #include <sys/atomic.h>
+#include <sys/gmon.h>
 
 #include <pthread.h>
 #include <stdlib.h>
@@ -103,6 +104,9 @@ _rthread_init(void)
 	}
 
 	_threads_inited = 1;
+
+	/* Ignore errors. NULL is OK for a non-profiling case. */
+	thread->gmonparam = _gmon_alloc();
 }
 
 /*
