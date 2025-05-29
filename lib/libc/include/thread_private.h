@@ -7,7 +7,6 @@
 
 #include <sys/types.h>
 #include <sys/gmon.h>
-#include <stdio.h>		/* for FILE and __isthreaded */
 
 extern int __isthreaded;
 
