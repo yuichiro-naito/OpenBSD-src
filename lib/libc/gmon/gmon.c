@@ -28,14 +28,12 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/param.h>
 #include <sys/time.h>
 #include <sys/gmon.h>
 #include <sys/mman.h>
 #include <sys/sysctl.h>
 
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
@@ -72,6 +70,7 @@ monstartup(u_long lowpc, u_long highpc)
 #define PAGESIZE	(1UL << _MAX_PAGE_SHIFT)
 #define PAGEMASK	(PAGESIZE - 1)
 #define PAGEROUND(x)	(((x) + (PAGEMASK)) & ~PAGEMASK)
+
 static void _gmon_destructor(void *);
 static void _gmon_merge(void);
 static void _gmon_merge_two(struct gmonparam *, struct gmonparam *);
