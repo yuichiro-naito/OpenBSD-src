@@ -169,7 +169,6 @@ struct gmonparam *
 _gmon_alloc(void)
 {
 	struct gmonparam *p;
-	size_t param_sz, from_sz, to_sz;
 
 	if (_gmonparam.state == GMON_PROF_OFF)
 		return NULL;
@@ -181,10 +180,10 @@ _gmon_alloc(void)
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	} else {
 		_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
-		param_sz = ALIGN(sizeof(struct gmonparam));
-		from_sz = ALIGN(_gmonparam.fromssize);
-		to_sz  = ALIGN(_gmonparam.tossize);
-		p = mmap(NULL, param_sz + from_sz + to_sz,
+		p = mmap(NULL,
+			 _ALIGN(sizeof(struct gmonparam)) +
+			 _ALIGN(_gmonparam.fromssize) +
+			 _ALIGN(_gmonparam.tossize),
 			 PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
 		if (p == MAP_FAILED) {
 			pthread_setspecific(_gmonkey, NULL);
@@ -194,8 +193,10 @@ _gmon_alloc(void)
 		*p = _gmonparam;
 		p->kcount = NULL;
 		p->kcountsize = 0;
-		p->froms = (void *)((uintptr_t)p + param_sz);
-		p->tos = (void *)((uintptr_t)p + param_sz + from_sz);
+		p->froms = (void *)((char *)p +
+				    _ALIGN(sizeof(struct gmonparam)));
+		p->tos = (void *)((char *)p + _ALIGN(sizeof(struct gmonparam)) +
+				  _ALIGN(_gmonparam.fromssize));
 		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
 	}
