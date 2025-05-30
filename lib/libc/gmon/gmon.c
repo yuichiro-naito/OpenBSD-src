@@ -181,8 +181,7 @@ _gmon_alloc(void)
 	} else {
 		_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 		p = mmap(NULL,
-			 _ALIGN(sizeof(struct gmonparam)) +
-			 _ALIGN(_gmonparam.fromssize) +
+			 _ALIGN(sizeof(*p)) + _ALIGN(_gmonparam.fromssize) +
 			 _ALIGN(_gmonparam.tossize),
 			 PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
 		if (p == MAP_FAILED) {
@@ -193,9 +192,8 @@ _gmon_alloc(void)
 		*p = _gmonparam;
 		p->kcount = NULL;
 		p->kcountsize = 0;
-		p->froms = (void *)((char *)p +
-				    _ALIGN(sizeof(struct gmonparam)));
-		p->tos = (void *)((char *)p + _ALIGN(sizeof(struct gmonparam)) +
+		p->froms = (void *)((char *)p + _ALIGN(sizeof(*p)));
+		p->tos = (void *)((char *)p + _ALIGN(sizeof(*p)) +
 				  _ALIGN(_gmonparam.fromssize));
 		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
