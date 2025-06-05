@@ -77,8 +77,8 @@ _gmon_destructor(void *arg)
 	struct gmonparam *p = arg, *q, **prev;
 
 	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
-	SLIST_REMOVE(&_gmoninuse, p, gmonparam, next);
-	SLIST_INSERT_HEAD(&_gmonfree, p, next);
+	SLIST_REMOVE(&_gmoninuse, p, gmonparam, list);
+	SLIST_INSERT_HEAD(&_gmonfree, p, list);
 	_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 
 	pthread_setspecific(_gmonkey, NULL);
@@ -171,8 +171,8 @@ _gmon_alloc(void)
 	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 	p = SLIST_FIRST(&_gmonfree);
 	if (p != NULL) {
-		SLIST_REMOVE_HEAD(&_gmonfree, next);
-		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
+		SLIST_REMOVE_HEAD(&_gmonfree, list);
+		SLIST_INSERT_HEAD(&_gmoninuse, p, list);
 	} else {
 		_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 		p = mmap(NULL,
@@ -191,7 +191,7 @@ _gmon_alloc(void)
 		p->tos = (void *)((char *)p + _ALIGN(sizeof(*p)) +
 				  _ALIGN(_gmonparam.fromssize));
 		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
-		SLIST_INSERT_HEAD(&_gmoninuse, p ,next);
+		SLIST_INSERT_HEAD(&_gmoninuse, p, list);
 	}
 	_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
 	pthread_setspecific(_gmonkey, p);
@@ -298,10 +298,10 @@ _gmon_merge(void)
 
 	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 
-	SLIST_FOREACH(q, &_gmonfree, next)
+	SLIST_FOREACH(q, &_gmonfree, list)
 		_gmon_merge_two(&_gmonparam, q);
 
-	SLIST_FOREACH(q, &_gmoninuse, next) {
+	SLIST_FOREACH(q, &_gmoninuse, list) {
 		q->state = GMON_PROF_OFF;
 		_gmon_merge_two(&_gmonparam, q);
 	}

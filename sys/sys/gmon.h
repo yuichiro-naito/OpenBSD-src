@@ -142,7 +142,7 @@ struct gmonparam {
 	size_t		outbuflen;
 	void		*rawarcs;
 	int		dirfd;
-	SLIST_ENTRY(gmonparam)	next;
+	SLIST_ENTRY(gmonparam)	list;
 };
 
 /*
