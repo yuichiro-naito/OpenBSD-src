@@ -203,10 +203,8 @@ DEF_WEAK(_gmon_alloc);
 static void
 _gmon_merge_two(struct gmonparam *p, struct gmonparam *q)
 {
-	u_long fromindex;
+	u_long fromindex, selfpc, endfrom;
 	u_short *frompcindex, qtoindex, toindex;
-	u_long selfpc;
-	u_long endfrom;
 	long count;
 	struct tostruct *top;
 
