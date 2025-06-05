@@ -198,7 +198,7 @@ static const struct pci_matchid amdgpu_devices[] = {
 	{0x1002, 0x74a1 },	/* Instinct MI300X dGPU */
 
 	/* GC 9.4.4, dGPU */
-	/* GC 9.5.0, dGPU */
+	/* GC 9.5.0, dGPU, linux 6.14 */
 
 	/* GC 10.3.1, DCN 3.0.1, APU, "Van Gogh" */
 	{0x1002, 0x1435 },	/* Custom GPU 0932 */
@@ -210,7 +210,10 @@ static const struct pci_matchid amdgpu_devices[] = {
 	 */
 	{0x1002, 0x164e },	/* Radeon 610M */
 
-	/* GC 10.3.6, DCN 3.1.5, APU, Ryzen 9000 "Granite Ridge" */
+	/*
+	 * GC 10.3.6, DCN 3.1.5, APU, Ryzen 9000 "Granite Ridge"
+	 * GC 10.3.6, DCN 3.1.5, APU, Ryzen 9000 "Fire Range"
+	 */
 	{0x1002, 0x13c0 },	/* Radeon Graphics */
 
 	/* GC 10.3.7, DCN 3.1.6, APU, Ryzen 7020 "Mendocino" */
@@ -257,10 +260,12 @@ static const struct pci_matchid amdgpu_devices[] = {
 	/* GC 11.5.2, DCN 3.5.1, APU, Ryzen AI 300 "Krackan Point" */
 	{0x1002, 0x1114 },	/* Radeon 840M / 860M */
 
-	/* GC 11.5.3, DCN 3.6.0?, APU */
+	/* GC 11.5.3, DCN 3.6.0?, APU, linux 6.15 */
 
-	/* GC 12.0.0, DCN 4.0.1, dGPU */
+	/* GC 12.0.0, DCN 4.0.1, dGPU, "Navi 44" */
+	{0x1002, 0x7590 },	/* Radeon RX 9060 XT */
 
 	/* GC 12.0.1, DCN 4.0.1, dGPU, "Navi 48" */
-	{0x1002, 0x7550 },	/* Radeon RX 9070, 9070 XT */
+	{0x1002, 0x7550 },	/* Radeon RX 9070, 9070 XT, 9070 GRE */
+	{0x1002, 0x7551 },	/* Radeon AI PRO R9700 */
 };

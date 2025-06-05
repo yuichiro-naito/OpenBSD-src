@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_sched.c,v 1.105 2025/05/16 13:40:30 mpi Exp $	*/
+/*	$OpenBSD: kern_sched.c,v 1.109 2025/06/03 00:20:31 dlg Exp $	*/
 /*
  * Copyright (c) 2007, 2008 Artur Grabowski <art@openbsd.org>
  *
@@ -147,13 +147,10 @@ sched_idle(void *v)
 	 * just go away for a while.
 	 */
 	SCHED_LOCK();
-	cpuset_add(&sched_idle_cpus, ci);
 	p->p_stat = SSLEEP;
 	p->p_cpu = ci;
 	atomic_setbits_int(&p->p_flag, P_CPUPEG);
 	mi_switch();
-	cpuset_del(&sched_idle_cpus, ci);
-	SCHED_UNLOCK();
 
 	KASSERT(ci == curcpu());
 	KASSERT(curproc == spc->spc_idleproc);
@@ -165,7 +162,6 @@ sched_idle(void *v)
 			SCHED_LOCK();
 			p->p_stat = SSLEEP;
 			mi_switch();
-			SCHED_UNLOCK();
 
 			while ((dead = TAILQ_FIRST(&spc->spc_deadproc))) {
 				TAILQ_REMOVE(&spc->spc_deadproc, dead, p_runq);
@@ -632,7 +628,6 @@ sched_peg_curproc(struct cpu_info *ci)
 	setrunqueue(ci, p, p->p_usrpri);
 	p->p_ru.ru_nvcsw++;
 	mi_switch();
-	SCHED_UNLOCK();
 }
 
 void
@@ -690,7 +685,7 @@ sched_stop_secondary_cpus(void)
 			continue;
 		while ((spc->spc_schedflags & SPCF_HALTED) == 0) {
 			sleep_setup(spc, PZERO, "schedstate");
-			sleep_finish(0,
+			sleep_finish(INFSLP,
 			    (spc->spc_schedflags & SPCF_HALTED) == 0);
 		}
 	}
@@ -751,19 +746,11 @@ sched_barrier(struct cpu_info *ci)
  * Functions to manipulate cpu sets.
  */
 struct cpu_info *cpuset_infos[MAXCPUS];
-static struct cpuset cpuset_all;
 
 void
 cpuset_init_cpu(struct cpu_info *ci)
 {
-	cpuset_add(&cpuset_all, ci);
 	cpuset_infos[CPU_INFO_UNIT(ci)] = ci;
-}
-
-void
-cpuset_clear(struct cpuset *cs)
-{
-	memset(cs, 0, sizeof(*cs));
 }
 
 void
@@ -788,12 +775,6 @@ cpuset_isset(struct cpuset *cs, struct cpu_info *ci)
 }
 
 void
-cpuset_add_all(struct cpuset *cs)
-{
-	cpuset_copy(cs, &cpuset_all);
-}
-
-void
 cpuset_copy(struct cpuset *to, struct cpuset *from)
 {
 	memcpy(to, from, sizeof(*to));
@@ -809,15 +790,6 @@ cpuset_first(struct cpuset *cs)
 			return (cpuset_infos[i * 32 + ffs(cs->cs_set[i]) - 1]);
 
 	return (NULL);
-}
-
-void
-cpuset_union(struct cpuset *to, struct cpuset *a, struct cpuset *b)
-{
-	int i;
-
-	for (i = 0; i < CPUSET_ASIZE(ncpus); i++)
-		to->cs_set[i] = a->cs_set[i] | b->cs_set[i];
 }
 
 void

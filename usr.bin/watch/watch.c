@@ -1,4 +1,4 @@
-/*	$OpenBSD: watch.c,v 1.25 2025/05/24 09:49:14 job Exp $ */
+/*	$OpenBSD: watch.c,v 1.28 2025/05/31 08:26:26 job Exp $ */
 /*
  * Copyright (c) 2000, 2001 Internet Initiative Japan Inc.
  * All rights reserved.
@@ -130,14 +130,14 @@ main(int argc, char *argv[])
 
 	setlocale(LC_CTYPE, "");
 
-	while ((ch = getopt(argc, argv, "cels:wx")) != -1)
+	while ((ch = getopt(argc, argv, "cels:wx")) != -1) {
 		switch (ch) {
 		case 'c':
 			highlight_mode = HIGHLIGHT_CHAR;
 			break;
 		case 'e':
 			pause_on_error = 1;
-			break; 
+			break;
 		case 'l':
 			highlight_mode = HIGHLIGHT_LINE;
 			break;
@@ -153,18 +153,14 @@ main(int argc, char *argv[])
 			break;
 		default:
 			usage();
-			exit(1);
 		}
+	}
+
 	argc -= optind;
 	argv += optind;
 
-	/*
-	 * Build command string to give to popen
-	 */
-	if (argc <= 0) {
+	if (argc <= 0)
 		usage();
-		exit(1);
-	}
 
 	if ((cmdv = calloc(argc + 1, sizeof(char *))) == NULL)
 		err(1, "calloc");
@@ -358,7 +354,7 @@ display(BUFFER * cur, BUFFER * prev, highlight_mode_t hm)
 				screen_x += cw;
 
 				/*
-				 * If the word highlight option is specified, and
+				 * If the word highlight option is specified and
 				 * the current character is not a space, print
 				 * the whole word which includes current
 				 * character.
@@ -497,7 +493,8 @@ kbd_command(int ch)
 		break;
 
 	case 'J':
-		start_line = MINIMUM(start_line + ((LINES - 2) / 2), MAXLINE - 1);
+		start_line = MINIMUM(start_line + ((LINES - 2) / 2),
+		    MAXLINE - 1);
 		break;
 
 	case 'K':
@@ -660,8 +657,11 @@ untabify(wchar_t *buf, int maxlen)
 	*p = L'\0';
 }
 
-void swap_buffers(void) {
+void
+swap_buffers(void)
+{
 	BUFFER *t;
+
 	t = prev_buf;
 	prev_buf = cur_buf;
 	cur_buf = t;
@@ -734,8 +734,7 @@ quit(void)
 void
 usage(void)
 {
-	extern char *__progname;
-
 	fprintf(stderr, "usage: %s [-celwx] [-s seconds] command [arg ...]\n",
-	    __progname);
+	    getprogname());
+	exit(1);
 }

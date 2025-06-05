@@ -1,4 +1,4 @@
-/* $OpenBSD: vmm_machdep.c,v 1.51 2025/05/25 07:29:23 bluhm Exp $ */
+/* $OpenBSD: vmm_machdep.c,v 1.57 2025/06/03 19:15:29 sf Exp $ */
 /*
  * Copyright (c) 2014 Mike Larkin <mlarkin@openbsd.org>
  *
@@ -154,6 +154,7 @@ int svm_get_vmsa_pa(uint32_t, uint32_t, uint64_t *);
 int vmm_gpa_is_valid(struct vcpu *vcpu, paddr_t gpa, size_t obj_size);
 void vmm_init_pvclock(struct vcpu *, paddr_t);
 int vmm_update_pvclock(struct vcpu *);
+void vmm_pv_wall_clock(struct vcpu *, paddr_t);
 int vmm_pat_is_valid(uint64_t);
 
 #ifdef MULTIPROCESSOR
@@ -193,6 +194,7 @@ extern uint64_t tsc_frequency;
 extern int tsc_is_invariant;
 
 const char *vmm_hv_signature = VMM_HV_SIGNATURE;
+const char *kvm_hv_signature = "KVMKVMKVM\0\0\0";
 
 const struct kmem_pa_mode vmm_kp_contig = {
 	.kp_constraint = &no_constraint,
@@ -1036,9 +1038,9 @@ vcpu_readregs_vmx(struct vcpu *vcpu, uint64_t regmask, int loadvmcs,
 		gprs[VCPU_REGS_RIP] = vcpu->vc_gueststate.vg_rip;
 		if (vmread(VMCS_GUEST_IA32_RSP, &gprs[VCPU_REGS_RSP]))
 			goto errout;
-                if (vmread(VMCS_GUEST_IA32_RFLAGS, &gprs[VCPU_REGS_RFLAGS]))
+		if (vmread(VMCS_GUEST_IA32_RFLAGS, &gprs[VCPU_REGS_RFLAGS]))
 			goto errout;
-        }
+	}
 
 	if (regmask & VM_RWREGS_SREGS) {
 		for (i = 0; i < nitems(vmm_vmx_sreg_vmcs_fields); i++) {
@@ -1318,7 +1320,7 @@ vcpu_writeregs_vmx(struct vcpu *vcpu, uint64_t regmask, int loadvmcs,
 			goto errout;
 		if (vmwrite(VMCS_GUEST_IA32_RSP, gprs[VCPU_REGS_RSP]))
 			goto errout;
-                if (vmwrite(VMCS_GUEST_IA32_RFLAGS, gprs[VCPU_REGS_RFLAGS]))
+		if (vmwrite(VMCS_GUEST_IA32_RFLAGS, gprs[VCPU_REGS_RFLAGS]))
 			goto errout;
 	}
 
@@ -1655,9 +1657,9 @@ vcpu_reset_regs_svm(struct vcpu *vcpu, struct vcpu_reg_state *vrs)
 
 	/* PAT */
 	vmcb->v_g_pat = PATENTRY(0, PAT_WB) | PATENTRY(1, PAT_WC) |
-            PATENTRY(2, PAT_UCMINUS) | PATENTRY(3, PAT_UC) |
-            PATENTRY(4, PAT_WB) | PATENTRY(5, PAT_WC) |
-            PATENTRY(6, PAT_UCMINUS) | PATENTRY(7, PAT_UC);
+	    PATENTRY(2, PAT_UCMINUS) | PATENTRY(3, PAT_UC) |
+	    PATENTRY(4, PAT_WB) | PATENTRY(5, PAT_WC) |
+	    PATENTRY(6, PAT_UCMINUS) | PATENTRY(7, PAT_UC);
 
 	/* NPT */
 	vmcb->v_np_enable = SVM_ENABLE_NP;
@@ -3221,7 +3223,7 @@ vcpu_vmx_compute_ctrl(uint64_t ctrlval, uint16_t ctrl, uint32_t want1,
 				 *
 				 * 2.c.iii - "If the relevant VMX capability
 				 * MSR reports that a control can be set to 0
-			 	 * or 1 and the control is not in the default1
+				 * or 1 and the control is not in the default1
 				 * class, set the control to 0."
 				 *
 				 * 2.c.iv - "If the relevant VMX capability
@@ -3966,7 +3968,7 @@ vcpu_run_vmx(struct vcpu *vcpu, struct vm_run_params *vrp)
 				    "exit\n", __func__);
 				ret = EINVAL;
 				break;
-                        }
+			}
 
 			/*
 			 * Handle the exit. This will alter "ret" to EAGAIN if
@@ -4348,6 +4350,25 @@ svm_vmgexit_sync_host(struct vcpu *vcpu)
 		ghcb_valbm_set(expected_bm, GHCB_RAX);
 		ghcb_valbm_set(expected_bm, GHCB_RCX);
 		break;
+	case SVM_VMEXIT_IOIO:
+		if (ghcb->v_sw_exitinfo1 & 0x1) {
+			/* IN instruction, no registers used */
+		} else {
+			/* OUT instruction */
+			ghcb_valbm_set(expected_bm, GHCB_RAX);
+		}
+		break;
+	case SVM_VMEXIT_MSR:
+		if (ghcb->v_sw_exitinfo1 == 1) {
+			/* WRMSR */
+			ghcb_valbm_set(expected_bm, GHCB_RAX);
+			ghcb_valbm_set(expected_bm, GHCB_RCX);
+			ghcb_valbm_set(expected_bm, GHCB_RDX);
+		} else {
+			/* RDMSR */
+			ghcb_valbm_set(expected_bm, GHCB_RCX);
+		}
+		break;
 	default:
 		return (EINVAL);
 	}
@@ -4404,6 +4425,23 @@ svm_vmgexit_sync_guest(struct vcpu *vcpu)
 		ghcb_valbm_set(valid_bm, GHCB_RCX);
 		ghcb_valbm_set(valid_bm, GHCB_RDX);
 		break;
+	case SVM_VMEXIT_IOIO:
+		if (svm_sw_exitinfo1 & 0x1) {
+			/* IN instruction */
+			ghcb_valbm_set(valid_bm, GHCB_RAX);
+		} else {
+			/* OUT instruction, nothing to return */
+		}
+		break;
+	case SVM_VMEXIT_MSR:
+		if (svm_sw_exitinfo1 == 1) {
+			/* WRMSR, nothing to return */
+		} else {
+			/* RDMSR */
+			ghcb_valbm_set(valid_bm, GHCB_RAX);
+			ghcb_valbm_set(valid_bm, GHCB_RDX);
+		}
+		break;
 	default:
 		return (EINVAL);
 	}
@@ -4444,13 +4482,70 @@ svm_handle_vmgexit(struct vcpu *vcpu)
 	struct vm		*vm = vcpu->vc_parent;
 	struct ghcb_sa		*ghcb;
 	paddr_t			 ghcb_gpa, ghcb_hpa;
+	uint32_t		 req, resp;
+	uint64_t		 result;
 	int			 syncout, error = 0;
 
-	if (vcpu->vc_svm_ghcb_va == 0) {
+	if (vcpu->vc_svm_ghcb_va == 0 && (vmcb->v_ghcb_gpa & ~PG_FRAME) == 0 &&
+	    (vmcb->v_ghcb_gpa & PG_FRAME) != 0) {
+		/*
+		 * Guest provides a valid guest physcial address
+		 * for GHCB and it is not set yet -> assign it.
+		 *
+		 * We only accept a GHCB once; we decline re-definition.
+		 */
 		ghcb_gpa = vmcb->v_ghcb_gpa & PG_FRAME;
 		if (!pmap_extract(vm->vm_pmap, ghcb_gpa, &ghcb_hpa))
 			return (EINVAL);
 		vcpu->vc_svm_ghcb_va = (vaddr_t)PMAP_DIRECT_MAP(ghcb_hpa);
+	} else if ((vmcb->v_ghcb_gpa & ~PG_FRAME) != 0) {
+		/*
+		 * Low bits in use, thus must be a MSR protocol
+		 * request.
+		 */
+		req = (vmcb->v_ghcb_gpa & 0xffffffff);
+
+		/* We only support cpuid and terminate. */
+		if ((req & ~PG_FRAME) == MSR_PROTO_TERMINATE) {
+			DPRINTF("%s: guest requests termination\n", __func__);
+			return (1);
+		} else if ((req & ~PG_FRAME) != MSR_PROTO_CPUID_REQ)
+			return (EINVAL);
+
+		/* Emulate CPUID */
+		vmcb->v_exitcode = SVM_VMEXIT_CPUID;
+		vmcb->v_rax = vmcb->v_ghcb_gpa >> 32;
+		vcpu->vc_gueststate.vg_rax = 0;
+		vcpu->vc_gueststate.vg_rbx = 0;
+		vcpu->vc_gueststate.vg_rcx = 0;
+		vcpu->vc_gueststate.vg_rdx = 0;
+		error = vmm_handle_cpuid(vcpu);
+		if (error)
+			goto out;
+
+		switch (req >> 30) {
+		case 0:	/* eax: emulate cpuid and return eax */
+			result = vmcb->v_rax;
+			break;
+		case 1:	/* return ebx */
+			result = vcpu->vc_gueststate.vg_rbx;
+			break;
+		case 2:	/* return ecx */
+			result = vcpu->vc_gueststate.vg_rcx;
+			break;
+		case 3:	/* return edx */
+			result = vcpu->vc_gueststate.vg_rdx;
+			break;
+		default:
+			DPRINTF("%s: unknown request 0x%x\n", __func__, req);
+			return (EINVAL);
+		}
+
+		/* build response */
+		resp = MSR_PROTO_CPUID_RESP | (req & 0xc0000000);
+		vmcb->v_ghcb_gpa = (result << 32) | resp;
+
+		return (0);
 	}
 
 	/* Verify GHCB and synchronize guest state information. */
@@ -4467,6 +4562,15 @@ svm_handle_vmgexit(struct vcpu *vcpu)
 		error = vmm_handle_cpuid(vcpu);
 		vmcb->v_rip = vcpu->vc_gueststate.vg_rip;
 		vcpu->vc_gueststate.vg_rax = vmcb->v_rax;
+		syncout = 1;
+		break;
+	case SVM_VMEXIT_IOIO:
+		if (svm_handle_inout(vcpu) == 0)
+			error = EAGAIN;
+		break;
+	case SVM_VMEXIT_MSR:
+		error = svm_handle_msr(vcpu);
+		vmcb->v_rip = vcpu->vc_gueststate.vg_rip;
 		syncout = 1;
 		break;
 	default:
@@ -5941,6 +6045,10 @@ vmx_handle_wrmsr(struct vcpu *vcpu)
 		vmm_init_pvclock(vcpu,
 		    (*rax & 0xFFFFFFFFULL) | (*rdx  << 32));
 		break;
+	case KVM_MSR_WALL_CLOCK:
+		vmm_pv_wall_clock(vcpu,
+		    (*rax & 0xFFFFFFFFULL) | (*rdx  << 32));
+		break;
 #ifdef VMM_DEBUG
 	default:
 		/*
@@ -6000,6 +6108,10 @@ svm_handle_msr(struct vcpu *vcpu)
 			break;
 		case KVM_MSR_SYSTEM_TIME:
 			vmm_init_pvclock(vcpu,
+			    (*rax & 0xFFFFFFFFULL) | (*rdx  << 32));
+			break;
+		case KVM_MSR_WALL_CLOCK:
+			vmm_pv_wall_clock(vcpu,
 			    (*rax & 0xFFFFFFFFULL) | (*rdx  << 32));
 			break;
 		default:
@@ -6228,7 +6340,7 @@ vmm_handle_cpuid(struct vcpu *vcpu)
 		*rcx = 0;
 		*rdx = 0;
 		break;
-	case 0x04: 	/* Deterministic cache info */
+	case 0x04:	/* Deterministic cache info */
 		*rax = eax & VMM_CPUID4_CACHE_TOPOLOGY_MASK;
 		*rbx = ebx;
 		*rcx = ecx;
@@ -6357,6 +6469,20 @@ vmm_handle_cpuid(struct vcpu *vcpu)
 		*rcx = 0;
 		*rdx = 0;
 		break;
+	case 0x40000100:	/* Hypervisor information KVM */
+		*rax = 0x40000101;
+		*rbx = *((uint32_t *)&kvm_hv_signature[0]);
+		*rcx = *((uint32_t *)&kvm_hv_signature[4]);
+		*rdx = *((uint32_t *)&kvm_hv_signature[8]);
+		break;
+	case 0x40000101:	/* KVM hypervisor features */
+		*rax = (1 << KVM_FEATURE_CLOCKSOURCE2) |
+		    (1 << KVM_FEATURE_CLOCKSOURCE_STABLE_BIT) |
+		    (1 << KVM_FEATURE_NOP_IO_DELAY);
+		*rbx = 0;
+		*rcx = 0;
+		*rdx = 0;
+		break;
 	case 0x80000000:	/* Extended function level */
 		/* We don't emulate past 0x8000001f currently. */
 		*rax = min(curcpu()->ci_pnfeatset, 0x8000001f);
@@ -6364,7 +6490,7 @@ vmm_handle_cpuid(struct vcpu *vcpu)
 		*rcx = 0;
 		*rdx = 0;
 		break;
-	case 0x80000001: 	/* Extended function info */
+	case 0x80000001:	/* Extended function info */
 		*rax = curcpu()->ci_efeature_eax;
 		*rbx = 0;	/* Reserved */
 		*rcx = curcpu()->ci_efeature_ecx & VMM_ECPUIDECX_MASK;
@@ -6438,7 +6564,7 @@ vmm_handle_cpuid(struct vcpu *vcpu)
 		/*
 		 * update %rax. the rest of the registers get updated in
 		 * svm_enter_guest
-	 	 */
+		 */
 		vmcb->v_rax = *rax;
 	}
 
@@ -6490,6 +6616,8 @@ vcpu_run_svm(struct vcpu *vcpu, struct vm_run_params *vrp)
 		vcpu->vc_gueststate.vg_rip =
 		    vcpu->vc_exit.vrs.vrs_gprs[VCPU_REGS_RIP];
 		vmcb->v_rip = vcpu->vc_gueststate.vg_rip;
+		if (svm_vmgexit_sync_guest(vcpu))
+			return (EINVAL);
 		break;
 	case SVM_VMEXIT_NPF:
 		ret = vcpu_writeregs_svm(vcpu, VM_RWREGS_GPRS,
@@ -6804,13 +6932,13 @@ vmm_free_vpid(uint16_t vpid)
  * Check if the given gpa is within guest memory space.
  *
  * Parameters:
- * 	vcpu: The virtual cpu we are running on.
- * 	gpa: The address to check.
- * 	obj_size: The size of the object assigned to gpa
+ *	vcpu: The virtual cpu we are running on.
+ *	gpa: The address to check.
+ *	obj_size: The size of the object assigned to gpa
  *
  * Return values:
- * 	1: gpa is within the memory ranges allocated for the vcpu
- * 	0: otherwise
+ *	1: gpa is within the memory ranges allocated for the vcpu
+ *	0: otherwise
  */
 int
 vmm_gpa_is_valid(struct vcpu *vcpu, paddr_t gpa, size_t obj_size)
@@ -6835,7 +6963,7 @@ vmm_init_pvclock(struct vcpu *vcpu, paddr_t gpa)
 {
 	paddr_t pvclock_gpa = gpa & 0xFFFFFFFFFFFFFFF0;
 	if (!vmm_gpa_is_valid(vcpu, pvclock_gpa,
-	        sizeof(struct pvclock_time_info))) {
+		sizeof(struct pvclock_time_info))) {
 		/* XXX: Kill guest? */
 		vmm_inject_gp(vcpu);
 		return;
@@ -6876,7 +7004,7 @@ vmm_update_pvclock(struct vcpu *vcpu)
 		    (++vcpu->vc_pvclock_version << 1) | 0x1;
 
 		pvclock_ti->ti_tsc_timestamp = rdtsc();
-		nanotime(&tv);
+		nanouptime(&tv);
 		pvclock_ti->ti_system_time =
 		    tv.tv_sec * 1000000000L + tv.tv_nsec;
 		pvclock_ti->ti_tsc_shift = 12;
@@ -6889,6 +7017,36 @@ vmm_update_pvclock(struct vcpu *vcpu)
 	}
 	return (0);
 }
+
+void
+vmm_pv_wall_clock(struct vcpu *vcpu, paddr_t gpa)
+{
+	struct pvclock_wall_clock *pvclock_wc;
+	struct timespec tv;
+	struct vm *vm = vcpu->vc_parent;
+	paddr_t hpa;
+
+	if (!vmm_gpa_is_valid(vcpu, gpa, sizeof(struct pvclock_wall_clock)))
+		goto err;
+
+	/* XXX: handle case when this struct goes over page boundaries */
+	if ((gpa & PAGE_MASK) + sizeof(struct pvclock_wall_clock) > PAGE_SIZE)
+		goto err;
+
+	if (!pmap_extract(vm->vm_pmap, gpa, &hpa))
+		goto err;
+	pvclock_wc = (void*) PMAP_DIRECT_MAP(hpa);
+	pvclock_wc->wc_version |= 0x1;
+	nanoboottime(&tv);
+	pvclock_wc->wc_sec = tv.tv_sec;
+	pvclock_wc->wc_nsec = tv.tv_nsec;
+	pvclock_wc->wc_version += 1;
+
+	return;
+err:
+	vmm_inject_gp(vcpu);
+}
+
 
 int
 vmm_pat_is_valid(uint64_t pat)
@@ -7022,7 +7180,7 @@ svm_exit_reason_decode(uint32_t code)
 	case SVM_VMEXIT_CR13_WRITE: return "CR13 write";	/* 0x1D */
 	case SVM_VMEXIT_CR14_WRITE: return "CR14 write";	/* 0x1E */
 	case SVM_VMEXIT_CR15_WRITE: return "CR15 write";	/* 0x1F */
-	case SVM_VMEXIT_DR0_READ: return "DR0 read";	 	/* 0x20 */
+	case SVM_VMEXIT_DR0_READ: return "DR0 read";		/* 0x20 */
 	case SVM_VMEXIT_DR1_READ: return "DR1 read";		/* 0x21 */
 	case SVM_VMEXIT_DR2_READ: return "DR2 read";		/* 0x22 */
 	case SVM_VMEXIT_DR3_READ: return "DR3 read";		/* 0x23 */

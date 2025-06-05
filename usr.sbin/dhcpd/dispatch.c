@@ -1,4 +1,4 @@
-/*	$OpenBSD: dispatch.c,v 1.45 2023/09/02 10:18:45 kn Exp $ */
+/*	$OpenBSD: dispatch.c,v 1.49 2025/06/04 21:16:25 dlg Exp $ */
 
 /*
  * Copyright (c) 1995, 1996, 1997, 1998, 1999
@@ -67,12 +67,9 @@
 #include "log.h"
 #include "sync.h"
 
-extern int syncfd;
-
 struct interface_info *interfaces;
 struct protocol *protocols;
 struct dhcpd_timeout *timeouts;
-static struct dhcpd_timeout *free_timeouts;
 static int interfaces_invalidated;
 
 static int interface_status(struct interface_info *ifinfo);
@@ -306,10 +303,9 @@ dispatch(void)
 	static struct pollfd *fds;
 	static int nfds_max;
 	time_t howlong;
+	int nifaces;
 
 	for (nfds = 0, l = protocols; l; l = l->next)
-		nfds++;
-	if (syncfd != -1)
 		nfds++;
 	if (nfds > nfds_max) {
 		fds = reallocarray(fds, nfds, sizeof(struct pollfd));
@@ -330,9 +326,8 @@ another:
 			if (timeouts->when <= cur_time) {
 				struct dhcpd_timeout *t = timeouts;
 				timeouts = timeouts->next;
-				(*(t->func))(t->what);
-				t->next = free_timeouts;
-				free_timeouts = t;
+				t->func(t->what);
+				free(t);
 				goto another;
 			}
 
@@ -350,24 +345,24 @@ another:
 			to_msec = -1;
 
 		/* Set up the descriptors to be polled. */
+		nifaces = 0;
 		for (i = 0, l = protocols; l; l = l->next) {
-			struct interface_info *ip = l->local;
-
-			if (ip && (l->handler != got_one || !ip->dead)) {
-				fds[i].fd = l->fd;
-				fds[i].events = POLLIN;
-				++i;
+			if (l->handler == got_one) {
+				struct interface_info *ip = l->local;
+				if (ip->dead) {
+					l->pfd = -1;
+					continue;
+				} else
+					nifaces++;
 			}
-		}
 
-		if (i == 0)
-			fatalx("No live interfaces to poll on - exiting.");
-
-		if (syncfd != -1) {
-			/* add syncer */
-			fds[i].fd = syncfd;
+			fds[i].fd = l->fd;
 			fds[i].events = POLLIN;
+			l->pfd = i++;
 		}
+
+		if (nifaces == 0)
+			fatalx("No live interfaces to poll on - exiting.");
 
 		/* Wait for a packet or a timeout... */
 		switch (poll(fds, nfds, to_msec)) {
@@ -380,20 +375,14 @@ another:
 		}
 		time(&cur_time);
 
-		for (i = 0, l = protocols; l; l = l->next) {
-			struct interface_info *ip = l->local;
+		for (l = protocols; l; l = l->next) {
+			i = l->pfd;
+			if (i == -1)
+				continue;
 
-			if ((fds[i].revents & (POLLIN | POLLHUP))) {
-				if (ip && (l->handler != got_one ||
-				    !ip->dead))
-					(*(l->handler))(l);
-				if (interfaces_invalidated)
-					break;
-			}
-			++i;
+			if (fds[i].revents & (POLLIN | POLLHUP))
+				l->handler(l);
 		}
-		if ((syncfd != -1) && (fds[i].revents & (POLLIN | POLLHUP)))
-			sync_recv();
 		interfaces_invalidated = 0;
 	}
 }
@@ -543,18 +532,11 @@ add_timeout(time_t when, void (*where)(void *), void *what)
 	/* If we didn't supersede a timeout, allocate a timeout
 	   structure now. */
 	if (!q) {
-		if (free_timeouts) {
-			q = free_timeouts;
-			free_timeouts = q->next;
-			q->func = where;
-			q->what = what;
-		} else {
-			q = malloc(sizeof (struct dhcpd_timeout));
-			if (!q)
-				fatalx("Can't allocate timeout structure!");
-			q->func = where;
-			q->what = what;
-		}
+		q = malloc(sizeof (struct dhcpd_timeout));
+		if (!q)
+			fatalx("Can't allocate timeout structure!");
+		q->func = where;
+		q->what = what;
 	}
 
 	q->when = when;
@@ -595,15 +577,10 @@ cancel_timeout(void (*where)(void *), void *what)
 				t->next = q->next;
 			else
 				timeouts = q->next;
-			break;
+			free(q);
+			return;
 		}
 		t = q;
-	}
-
-	/* If we found the timeout, put it on the free list. */
-	if (q) {
-		q->next = free_timeouts;
-		free_timeouts = q;
 	}
 }
 

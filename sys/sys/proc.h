@@ -1,4 +1,4 @@
-/*	$OpenBSD: proc.h,v 1.389 2025/05/24 06:49:16 deraadt Exp $	*/
+/*	$OpenBSD: proc.h,v 1.391 2025/05/31 12:40:33 dlg Exp $	*/
 /*	$NetBSD: proc.h,v 1.44 1996/04/22 01:23:21 christos Exp $	*/
 
 /*-
@@ -51,6 +51,7 @@
 #include <sys/rwlock.h>			/* For struct rwlock */
 #include <sys/sigio.h>			/* For struct sigio */
 #include <sys/refcnt.h>			/* For struct refcnt */
+#include <sys/pclock.h>
 
 #ifdef _KERNEL
 #include <sys/atomic.h>
@@ -91,8 +92,8 @@ struct	pgrp {
  * Each thread is immediately accumulated here. For processes only the
  * time of exited threads is accumulated and to get the proper process
  * time usage tuagg_get_process() needs to be called.
- * Accounting of threads is done lockless by curproc using the tu_gen
- * generation counter. Code should use tu_enter() and tu_leave() for this.
+ * Accounting of threads is done lockless by curproc using the tu_pcl
+ * pc_lock. Code should use tu_enter() and tu_leave() for this.
  * The process ps_tu structure is locked by the ps_mtx.
  */
 #define TU_UTICKS	0		/* Statclock hits in user mode. */
@@ -101,7 +102,7 @@ struct	pgrp {
 #define TU_TICKS_COUNT	3
 
 struct tusage {
-	uint64_t	tu_gen;		/* generation counter */
+	struct	pc_lock	tu_pcl;
 	uint64_t	tu_ticks[TU_TICKS_COUNT];
 #define tu_uticks	tu_ticks[TU_UTICKS]
 #define tu_sticks	tu_ticks[TU_STICKS]
@@ -642,30 +643,25 @@ struct cpuset {
 
 void cpuset_init_cpu(struct cpu_info *);
 
-void cpuset_clear(struct cpuset *);
 void cpuset_add(struct cpuset *, struct cpu_info *);
 void cpuset_del(struct cpuset *, struct cpu_info *);
 int cpuset_isset(struct cpuset *, struct cpu_info *);
-void cpuset_add_all(struct cpuset *);
 void cpuset_copy(struct cpuset *, struct cpuset *);
-void cpuset_union(struct cpuset *, struct cpuset *, struct cpuset *);
 void cpuset_intersection(struct cpuset *t, struct cpuset *, struct cpuset *);
 void cpuset_complement(struct cpuset *, struct cpuset *, struct cpuset *);
 int cpuset_cardinality(struct cpuset *);
 struct cpu_info *cpuset_first(struct cpuset *);
 
-static inline void
+static inline unsigned int
 tu_enter(struct tusage *tu)
 {
-	++tu->tu_gen; /* make the generation number odd */
-	membar_producer();
+	return pc_sprod_enter(&tu->tu_pcl);
 }
 
 static inline void
-tu_leave(struct tusage *tu)
+tu_leave(struct tusage *tu, unsigned int gen)
 {
-	membar_producer();
-	++tu->tu_gen; /* make the generation number even again */
+	pc_sprod_leave(&tu->tu_pcl, gen);
 }
 
 #endif	/* _KERNEL */

@@ -1,4 +1,4 @@
-/*	$OpenBSD: udp_usrreq.c,v 1.338 2025/05/24 12:27:23 bluhm Exp $	*/
+/*	$OpenBSD: udp_usrreq.c,v 1.341 2025/06/03 16:51:26 bluhm Exp $	*/
 /*	$NetBSD: udp_usrreq.c,v 1.28 1996/03/16 23:54:03 christos Exp $	*/
 
 /*
@@ -213,8 +213,8 @@ udp_input(struct mbuf **mp, int *offp, int proto, int af, struct netstack *ns)
 
 	udpstat_inc(udps_ipackets);
 
-	IP6_EXTHDR_GET(uh, struct udphdr *, mp, iphlen, sizeof(struct udphdr));
-	if (!uh) {
+	uh = ip6_exthdr_get(mp, iphlen, sizeof(struct udphdr));
+	if (uh == NULL) {
 		udpstat_inc(udps_hdrops);
 		return IPPROTO_DONE;
 	}
@@ -303,7 +303,7 @@ udp_input(struct mbuf **mp, int *offp, int proto, int af, struct netstack *ns)
 	CLR(m->m_pkthdr.csum_flags, M_UDP_CSUM_OUT);
 
 #ifdef IPSEC
-	if (udpencap_enable && udpencap_port && esp_enable &&
+	if (udpencap_enable && udpencap_port && atomic_load_int(&esp_enable) &&
 #if NPF > 0
 	    !(m->m_pkthdr.pf.flags & PF_TAG_DIVERTED) &&
 #endif
@@ -921,10 +921,10 @@ udp_ctlinput(int cmd, struct sockaddr *sa, u_int rdomain, void *v)
 		    ip->ip_dst, uhp->uh_dport, ip->ip_src, uhp->uh_sport,
 		    rdomain);
 		if (inp != NULL)
-			so = in_pcbsolock_ref(inp);
+			so = in_pcbsolock(inp);
 		if (so != NULL)
 			notify(inp, errno);
-		in_pcbsounlock_rele(inp, so);
+		in_pcbsounlock(inp, so);
 		in_pcbunref(inp);
 	} else
 		in_pcbnotifyall(&udbtable, satosin(sa), rdomain, errno, notify);

@@ -1,4 +1,4 @@
-/* $OpenBSD: acpi.c,v 1.446 2025/05/24 14:51:52 tedu Exp $ */
+/* $OpenBSD: acpi.c,v 1.448 2025/06/02 02:20:56 tedu Exp $ */
 /*
  * Copyright (c) 2005 Thorsten Lockert <tholo@sigmasoft.com>
  * Copyright (c) 2005 Jordan Hargrave <jordan@openbsd.org>
@@ -888,27 +888,20 @@ acpi_gpio_event_task(void *arg0, int arg1)
 	char name[5];
 
 	if (pin < 256) {
-		if ((ev->tflags & LR_GPIO_MODE) == LR_GPIO_LEVEL) {
+		if ((ev->tflags & LR_GPIO_MODE) == LR_GPIO_LEVEL)
 			snprintf(name, sizeof(name), "_L%.2X", pin);
-			if (aml_evalname(sc, ev->node, name, 0, NULL, NULL)) {
-				if (gpio->intr_enable)
-					gpio->intr_enable(gpio->cookie, pin);
-				return;
-			}
-		} else {
+		else
 			snprintf(name, sizeof(name), "_E%.2X", pin);
-			if (aml_evalname(sc, ev->node, name, 0, NULL, NULL)) {
-				if (gpio->intr_enable)
-					gpio->intr_enable(gpio->cookie, pin);
-				return;
-			}
-		}
+		if (aml_evalname(sc, ev->node, name, 0, NULL, NULL) == 0)
+			goto intr_enable;
 	}
 
 	memset(&evt, 0, sizeof(evt));
 	evt.v_integer = pin;
 	evt.type = AML_OBJTYPE_INTEGER;
 	aml_evalname(sc, ev->node, "_EVT", 1, &evt, NULL);
+
+intr_enable:
 	if ((ev->tflags & LR_GPIO_MODE) == LR_GPIO_LEVEL) {
 		if (gpio->intr_enable)
 			gpio->intr_enable(gpio->cookie, pin);
@@ -1144,9 +1137,11 @@ acpi_attach_common(struct acpi_softc *sc, paddr_t base)
 	/* Perform post-parsing fixups */
 	aml_postparse();
 
+#if 0
 	if (sc->sc_fadt->hdr_revision > 2 &&
 	    !ISSET(sc->sc_fadt->iapc_boot_arch, FADT_LEGACY_DEVICES))
 		acpi_legacy_free = 1;
+#endif
 
 #ifndef SMALL_KERNEL
 	/* Find available sleeping states */

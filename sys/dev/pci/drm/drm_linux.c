@@ -1,4 +1,4 @@
-/*	$OpenBSD: drm_linux.c,v 1.123 2025/05/01 01:16:42 dlg Exp $	*/
+/*	$OpenBSD: drm_linux.c,v 1.125 2025/06/04 13:00:50 jsg Exp $	*/
 /*
  * Copyright (c) 2013 Jonathan Gray <jsg@openbsd.org>
  * Copyright (c) 2015, 2016 Mark Kettenis <kettenis@openbsd.org>
@@ -29,6 +29,10 @@
 #include <sys/fcntl.h>
 
 #include <dev/pci/ppbreg.h>
+#include <dev/wscons/wsconsio.h>
+#include <dev/wscons/wsdisplayvar.h>
+
+#include <acpi/video.h>
 
 #include <linux/dma-buf.h>
 #include <linux/mod_devicetable.h>
@@ -136,15 +140,15 @@ long
 schedule_timeout(long timeout)
 {
 	unsigned long deadline;
-	int timo = 0;
+	uint64_t nsecs = INFSLP;
 
 	KASSERT(!cold);
 
-	if (timeout != MAX_SCHEDULE_TIMEOUT)
-		timo = timeout;
-	if (timeout != MAX_SCHEDULE_TIMEOUT)
+	if (timeout != MAX_SCHEDULE_TIMEOUT) {
 		deadline = jiffies + timeout;
-	sleep_finish(timo, timeout > 0);
+		nsecs = jiffies_to_nsecs(timeout);
+	}
+	sleep_finish(nsecs, timeout > 0);
 	if (timeout != MAX_SCHEDULE_TIMEOUT)
 		timeout = deadline - jiffies;
 
@@ -1535,6 +1539,17 @@ int
 acpi_target_system_state(void)
 {
 	return acpi_softc->sc_state;
+}
+
+enum acpi_backlight_type
+acpi_video_get_backlight_type(void)
+{
+	struct wsdisplay_param dp;
+
+	dp.param = WSDISPLAYIO_PARAM_BRIGHTNESS;
+	if (ws_get_param && ws_get_param(&dp) == 0)
+		return acpi_backlight_video;
+	return acpi_backlight_native;
 }
 
 #endif

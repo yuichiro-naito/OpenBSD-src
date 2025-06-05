@@ -1,4 +1,4 @@
-/*	$OpenBSD: test.c,v 1.1 2025/05/21 08:57:13 joshua Exp $ */
+/*	$OpenBSD: test.c,v 1.4 2025/05/31 11:36:48 tb Exp $ */
 /*
  * Copyright (c) 2025 Joshua Sing <joshua@joshuasing.dev>
  *
@@ -16,7 +16,6 @@
  */
 
 #include <err.h>
-#include <libgen.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,7 +45,8 @@ test_new(struct test *pt, const char *name)
 			err(1, "strdup");
 	}
 
-	t->out = pt->out;
+	if (pt != NULL)
+		t->out = pt->out;
 	t->parent = pt;
 
 	return t;
@@ -73,6 +73,7 @@ test_init(void)
 		err(1, "mkstemp");
 
 	unlink(tmp_file);
+	free(tmp_file);
 	if ((t->out = fdopen(out_fd, "w+")) == NULL)
 		err(1, "fdopen");
 

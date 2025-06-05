@@ -1,4 +1,4 @@
-/*	$OpenBSD: gmon.c,v 1.34 2025/05/24 06:53:19 deraadt Exp $ */
+/*	$OpenBSD: gmon.c,v 1.36 2025/05/31 14:17:09 deraadt Exp $ */
 /*-
  * Copyright (c) 1983, 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -395,6 +395,10 @@ _mcleanup(void)
 		}
 	}
 donearcs:
+	/*
+	 * Update field in header.  Kernel will use this to write
+	 * out a smaller amount of arcs than originally allocated
+	 */
 	hdr->totarc = totarc * sizeof(struct rawarc);
 }
 

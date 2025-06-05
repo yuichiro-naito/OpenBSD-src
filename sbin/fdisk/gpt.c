@@ -1,4 +1,4 @@
-/*	$OpenBSD: gpt.c,v 1.99 2025/05/25 06:25:45 krw Exp $	*/
+/*	$OpenBSD: gpt.c,v 1.101 2025/06/03 10:59:42 krw Exp $	*/
 /*
  * Copyright (c) 2015 Markus Muller <mmu@grummel.net>
  * Copyright (c) 2015 Kenneth R Westerback <krw@openbsd.org>
@@ -369,9 +369,14 @@ GPT_recover_partition(const char *line1, const char *line2, const char *line3)
 
 	uuid_from_string(type, &type_uuid, &status);
 	if (status != uuid_s_ok) {
-		p = PRT_desc_to_guid(type);
-		if (p)
-			uuid_from_string(p, &type_uuid, &status);
+		for (i = strlen(type); i > 0; i--) {
+			if (!isspace((unsigned char)type[i - 1]))
+				break;
+			type[i - 1] = '\0';
+		}
+		if ((p = PRT_desc_to_guid(type)) == NULL)
+			return -1;
+		uuid_from_string(p, &type_uuid, &status);
 		if (status != uuid_s_ok)
 			return -1;
 	}
@@ -513,7 +518,7 @@ GPT_print(const char *units, const int verbosity)
 #endif	/* DEBUG */
 
 	size = units_size(units, DL_GETDSIZE(&dl), &ut);
-	printf("Disk: %s       Usable LBA: %llu to %llu [%.0f ",
+	printf("Disk: %s\tUsable LBA: %llu to %llu [%.0f ",
 	    disk.dk_name, gh.gh_lba_start, gh.gh_lba_end, size);
 	if (ut->ut_conversion == 0 && secsize != DEV_BSIZE)
 		printf("%d-byte ", secsize);
