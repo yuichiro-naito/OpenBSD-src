@@ -71,9 +71,18 @@ monstartup(u_long lowpc, u_long highpc)
 #define PAGEMASK	(PAGESIZE - 1)
 #define PAGEROUND(x)	(((x) + (PAGEMASK)) & ~PAGEMASK)
 
-static void _gmon_destructor(void *);
-static void _gmon_merge(void);
-static void _gmon_merge_two(struct gmonparam *, struct gmonparam *);
+static void
+_gmon_destructor(void *arg)
+{
+	struct gmonparam *p = arg, *q, **prev;
+
+	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
+	SLIST_REMOVE(&_gmoninuse, p, gmonparam, next);
+	SLIST_INSERT_HEAD(&_gmonfree, p, next);
+	_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
+
+	pthread_setspecific(_gmonkey, NULL);
+}
 
 void
 _monstartup(u_long lowpc, u_long highpc)
@@ -149,19 +158,6 @@ _monstartup(u_long lowpc, u_long highpc)
 
 	if (p->dirfd != -1)
 		close(p->dirfd);
-}
-
-static void
-_gmon_destructor(void *arg)
-{
-	struct gmonparam *p = arg, *q, **prev;
-
-	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
-	SLIST_REMOVE(&_gmoninuse, p, gmonparam, next);
-	SLIST_INSERT_HEAD(&_gmonfree, p, next);
-	_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
-
-	pthread_setspecific(_gmonkey, NULL);
 }
 
 struct gmonparam *
