@@ -164,6 +164,7 @@ struct gmonparam *
 _gmon_alloc(void)
 {
 	struct gmonparam *p;
+	char *a;
 
 	if (_gmonparam.state == GMON_PROF_OFF)
 		return NULL;
@@ -175,21 +176,22 @@ _gmon_alloc(void)
 		SLIST_INSERT_HEAD(&_gmoninuse, p, list);
 	} else {
 		_THREAD_PRIVATE_MUTEX_UNLOCK(_gmonlock);
-		p = mmap(NULL,
+		a = mmap(NULL,
 			 _ALIGN(sizeof(*p)) + _ALIGN(_gmonparam.fromssize) +
 			 _ALIGN(_gmonparam.tossize),
 			 PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
-		if (p == MAP_FAILED) {
+		if (a == MAP_FAILED) {
 			pthread_setspecific(_gmonkey, NULL);
 			ERR("_gmon_alloc: out of memory\n");
 			return NULL;
 		}
+		p = (struct gmonparam *)a;
 		*p = _gmonparam;
 		p->kcount = NULL;
 		p->kcountsize = 0;
-		p->froms = (void *)((char *)p + _ALIGN(sizeof(*p)));
-		p->tos = (void *)((char *)p + _ALIGN(sizeof(*p)) +
-				  _ALIGN(_gmonparam.fromssize));
+		p->froms = (void *)(a + _ALIGN(sizeof(*p)));
+		p->tos = (void *)(a + _ALIGN(sizeof(*p)) +
+			_ALIGN(_gmonparam.fromssize));
 		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p, list);
 	}
