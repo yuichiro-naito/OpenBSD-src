@@ -45,10 +45,10 @@ struct gmonparam _gmonparam = { GMON_PROF_OFF };
 #include <pthread.h>
 #include <thread_private.h>
 
-SLIST_HEAD(, gmonparam) _gmonfree = SLIST_HEAD_INITIALIZER(_gmonfree);
-SLIST_HEAD(, gmonparam) _gmoninuse = SLIST_HEAD_INITIALIZER(_gmoninuse);
+static SLIST_HEAD(, gmonparam) _gmonfree = SLIST_HEAD_INITIALIZER(_gmonfree);
+static SLIST_HEAD(, gmonparam) _gmoninuse = SLIST_HEAD_INITIALIZER(_gmoninuse);
 _THREAD_PRIVATE_MUTEX(_gmonlock);
-pthread_key_t _gmonkey;
+static pthread_key_t _gmonkey;
 
 static int	s_scale;
 /* see profil(2) where this is describe (incorrectly) */
