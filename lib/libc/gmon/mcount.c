@@ -32,7 +32,6 @@
 #include <sys/gmon.h>
 
 #ifndef _KERNEL
-#include <pthread.h>
 #include <thread_private.h>
 #include <tib.h>
 #endif
@@ -71,18 +70,14 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 	if ((p = curcpu()->ci_gmon) == NULL)
 		return;
 #else
-	if (__isthreaded) {
-		pthread_t t = TIB_GET()->tib_thread;
-		if ((p = t->gmonparam) == NULL)
-			return;
-	} else
-		p = &_gmonparam;
+	p = (__isthreaded) ?
+		((pthread_t)TIB_GET()->tib_thread)->gmonparam : &_gmonparam;
 #endif
 	/*
 	 * check that we are profiling
 	 * and that we aren't recursively invoked.
 	 */
-	if (p->state != GMON_PROF_ON)
+	if (p == NULL || p->state != GMON_PROF_ON)
 		return;
 #ifdef _KERNEL
 	MCOUNT_ENTER;
