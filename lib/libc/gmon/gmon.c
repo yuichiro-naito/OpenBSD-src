@@ -191,7 +191,7 @@ _gmon_alloc(void)
 		p->kcountsize = 0;
 		p->froms = (void *)(a + _ALIGN(sizeof(*p)));
 		p->tos = (void *)(a + _ALIGN(sizeof(*p)) +
-			_ALIGN(_gmonparam.fromssize));
+		    _ALIGN(_gmonparam.fromssize));
 		_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 		SLIST_INSERT_HEAD(&_gmoninuse, p, list);
 	}
