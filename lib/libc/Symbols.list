@@ -880,6 +880,7 @@ _mcleanup
 _monstartup
 moncontrol
 monstartup
+_gmon_alloc
 
 /* hash */
 MD5Data
