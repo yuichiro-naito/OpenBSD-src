@@ -25,7 +25,9 @@
 #include <elf.h>
 #pragma weak _DYNAMIC
 #endif
+#ifdef __PROFIL_SRC__
 #include <sys/gmon.h>
+#endif
 
 #include <stdlib.h>
 #include <unistd.h>
