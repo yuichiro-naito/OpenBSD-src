@@ -10,6 +10,7 @@ CFLAGS+=-I${.CURDIR} -include namespace.h \
 	-I${LIBCSRCDIR}/arch/${MACHINE_CPU} -I${LIBCSRCDIR}/include
 CDIAGFLAGS=
 LDADD = -Wl,-znodelete
+PFLAGS= -D__PROFIL_SRC__
 
 .if defined(NOPIC)
 CFLAGS+=-DNO_PIC

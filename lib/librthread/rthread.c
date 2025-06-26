@@ -395,8 +395,10 @@ pthread_create(pthread_t *threadp, const pthread_attr_t *attr,
 	/* we're going to be multi-threaded real soon now */
 	__isthreaded = 1;
 
+#ifdef __PROFIL_SRC__
 	/* Ignore errors. NULL is OK for a non-profiling case. */
 	thread->gmonparam = _gmon_alloc();
+#endif
 
 	rc = __tfork_thread(&param, sizeof(param), _rthread_start, thread);
 	if (rc != -1) {
