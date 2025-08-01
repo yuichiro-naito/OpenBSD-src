@@ -131,6 +131,7 @@ efi_cons_probe(struct consdev *cn)
 {
 	cn->cn_pri = CN_MIDPRI;
 	cn->cn_dev = makedev(0, 0);
+	add_probed_tty(cn->cn_dev);
 }
 
 void
@@ -196,6 +197,7 @@ efi_com_probe(struct consdev *cn)
 {
 	cn->cn_pri = CN_LOWPRI;
 	cn->cn_dev = serial;
+	add_probed_tty(cn->cn_dev);
 }
 
 void
@@ -222,6 +224,7 @@ efi_fb_probe(struct consdev *cn)
 {
 	cn->cn_pri = CN_LOWPRI;
 	cn->cn_dev = framebuffer;
+	add_probed_tty(cn->cn_dev);
 }
 
 void

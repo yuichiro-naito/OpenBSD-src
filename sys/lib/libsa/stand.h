@@ -202,6 +202,9 @@ int	ioctl(int, u_long, char *);
 void	putchar(int);
 int	getchar(void);
 
+int	add_probed_tty(dev_t);
+int	is_probed_tty(dev_t);
+
 #ifdef __INTERNAL_LIBSA_CREAD
 int	oopen(const char *, int);
 int	oclose(int);

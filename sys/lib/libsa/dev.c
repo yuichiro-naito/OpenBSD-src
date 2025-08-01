@@ -34,6 +34,7 @@
 
 #include <sys/param.h>
 #include <sys/reboot.h>
+#include <sys/queue.h>
 
 #include "stand.h"
 
@@ -54,4 +55,40 @@ int
 noioctl(struct open_file *f, u_long cmd, void *data)
 {
 	return (EINVAL);
+}
+
+struct probed_tty {
+	dev_t dev;
+	STAILQ_ENTRY (probed_tty) list;
+};
+
+static STAILQ_HEAD(, probed_tty) probed_ttys = STAILQ_HEAD_INITIALIZER(probed_ttys);
+
+int
+add_probed_tty(dev_t ttydev)
+{
+	struct probed_tty *pt;
+
+	if (ttydev == NODEV)
+		return 0;
+
+	if ((pt = alloc(sizeof(*pt))) == NULL)
+		return -1;
+
+	pt->dev = ttydev;
+	STAILQ_INSERT_TAIL(&probed_ttys, pt, list);
+
+	return 0;
+}
+
+int
+is_probed_tty(dev_t ttydev)
+{
+	struct probed_tty *pt;
+
+	STAILQ_FOREACH(pt, &probed_ttys, list)
+		if (pt->dev == ttydev)
+			return 1;
+
+	return 0;
 }
