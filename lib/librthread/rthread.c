@@ -398,7 +398,7 @@ pthread_create(pthread_t *threadp, const pthread_attr_t *attr,
 	__isthreaded = 1;
 
 #ifdef __PROFIL_SRC__
-	/* Ignore errors. NULL is OK for a non-profiling case. */
+	/* NULL is ignored at the 'mcount' function. */
 	thread->gmonparam = _gmon_alloc();
 #endif
 

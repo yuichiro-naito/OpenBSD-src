@@ -193,9 +193,6 @@ _gmon_alloc(void)
 	struct gmonparam *p;
 	char *a;
 
-	if (_gmonparam.state == GMON_PROF_OFF)
-		return NULL;
-
 	_THREAD_PRIVATE_MUTEX_LOCK(_gmonlock);
 	p = SLIST_FIRST(&_gmonfree);
 	if (p != NULL) {

@@ -77,8 +77,10 @@ _MCOUNT_DECL(u_long frompc, u_long selfpc)
 	 * check that we are profiling
 	 * and that we aren't recursively invoked.
 	 */
-	if (p == NULL || p->state != GMON_PROF_ON)
+	if (p == NULL || _gmonparam.state != GMON_PROF_ON ||
+	    p->state == GMON_PROF_BUSY)
 		return;
+
 #ifdef _KERNEL
 	MCOUNT_ENTER;
 #else

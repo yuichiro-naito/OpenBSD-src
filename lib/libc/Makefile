@@ -10,6 +10,7 @@ LIBREBUILD=y
 CLEANFILES+=tags Symbols.map
 CFLAGS+=-Wimplicit
 #CFLAGS+=-Werror
+PFLAGS+=-D__PROFIL_SRC__
 LDADD=-nostdlib
 .if ${COMPILER_VERSION:L} == "clang"
 LDADD+=-lcompiler_rt

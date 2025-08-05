@@ -22,7 +22,9 @@
 #include <sys/types.h>
 #include <sys/futex.h>
 #include <sys/atomic.h>
+#ifdef __PROFIL_SRC__
 #include <sys/gmon.h>
+#endif
 
 #include <pthread.h>
 #include <stdlib.h>
@@ -322,8 +324,10 @@ _rthread_init(void)
 
 	_threads_inited = 1;
 
-	/* Ignore errors. NULL is OK for a non-profiling case. */
+#ifdef __PROFIL_SRC__
+	/* NULL is ignored at the 'mcount' function. */
 	thread->gmonparam = _gmon_alloc();
+#endif
 }
 
 /*
