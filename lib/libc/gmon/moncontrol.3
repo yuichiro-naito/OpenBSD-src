@@ -72,3 +72,14 @@ execution data file
 .Xr cc 1 ,
 .Xr gprof 1 ,
 .Xr profil 2
+.Sh CAVEATS
+The use of
+.Fn moncontrol 0
+is not allowed while
+.Xr pthread_create 3 .
+While stopping profiling,
+.Xr pthread_create 3
+doesn't allocate the collection buffer for the new thread, and for the
+main thread if it is the first call. This results in the failure to
+collect the caller/callee count for these threads and won't be recovered by
+.Fn moncontrol 1 .
