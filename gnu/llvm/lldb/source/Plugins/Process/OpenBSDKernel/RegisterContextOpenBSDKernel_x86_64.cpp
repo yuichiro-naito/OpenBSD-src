@@ -96,7 +96,7 @@ bool RegisterContextOpenBSDKernel_x86_64::ReadRegister(
       PCBREG(rbp, 0);
       PCBREG(rsp, 8);
     case lldb_rip_x86_64:
-      value = m_thread.GetProcess()->ReadPointerFromMemory(pcb.pcb_rbp, error);
+      value = m_thread.GetProcess()->ReadPointerFromMemory(pcb.pcb_rsp, error);
       return true;
     }
   }
