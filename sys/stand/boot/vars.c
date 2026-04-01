@@ -163,6 +163,8 @@ Xtty(void)
 		dev = ttydev(cmd.argv[1]);
 		if (dev == NODEV)
 			printf("%s not a console device\n", cmd.argv[1]);
+		else if (! is_probed_tty(dev))
+			printf("%s is not probed\n", cmd.argv[1]);
 		else {
 			printf("switching console to %s\n", cmd.argv[1]);
 			if (cnset(dev))
